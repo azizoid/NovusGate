@@ -1,0 +1,15 @@
+# Binaries
+meshvpn-server
+meshvpn-agent
+*.exe
+
+# Keys
+*.key
+*.crt
+
+# Data
+data/
+deployments/agent-bundles/
+
+# Go
+target/

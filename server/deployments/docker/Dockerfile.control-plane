@@ -1,0 +1,35 @@
+# Build stage
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build control plane binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o novusmesh-server ./cmd/control-plane
+
+# Runtime stage
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates curl wireguard-tools iptables
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/novusmesh-server .
+
+# Create non-root user (Commented out: WireGuard config is root-read-only)
+# RUN adduser -D -g '' novusmesh
+# USER novusmesh
+
+EXPOSE 8080 8443
+
+ENTRYPOINT ["./novusmesh-server"]
+CMD ["serve"]

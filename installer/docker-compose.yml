@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  installer:
+    build: .
+    container_name: novusmesh-installer
+    ports:
+      - "${PORT:-3017}:${PORT:-3017}"
+    volumes:
+      # Mount the server source code so it can be archived
+      - ../server:/server
+      # Mount web folder so installer can update .env
+      - ../web:/web
+      # Persist installer data (saved servers history)
+      - ./data:/app/data
+    restart: unless-stopped
