@@ -1,74 +1,170 @@
 # NovusMesh
 
-**NovusMesh**, WireGuard® protokolu üzərində qurulmuş, müasir, təhlükəsiz və özünü idarə edən (self-hosted) bir VPN həllidir. 
+🚀 **Öz şəxsi VPN şəbəkənizi qurun — SaaS asılılığı və ya ağrılı konfiqurasiyalar olmadan.**
 
-**Sistem Adminləri, Proqramçılar, DevOps mühəndisləri və sadə istifadəçilər** üçün nəzərdə tutulub. Layihənin əsas məqsədi, özəl mesh şəbəkənizi quraraq **cihazlarınızı istənilən yerdə və istənilən vaxt rahatlıqla idarə etməyə** imkan yaratmaqdır. İstər serverlərinizi, istərsə də şəxsi cihazlarınızı birləşdirin — NovusMesh bunu sadələşdirir.
+**NovusMesh** — **WireGuard®** protokolu üzərində qurulmuş, müasir, tamamilə özünü idarə edən (self-hosted) **VPN idarəetmə panelidir**.
+Bu sistem, tək bir veb paneldən idarə olunan təmiz **Hub-and-Spoke (Mərkəz və Budaq) arxitekturası** vasitəsilə serverləri, bulud instansiyalarını və şəxsi cihazları təhlükəsiz şəkildə birləşdirməyə imkan verir.
 
-![NovusMesh İdarə Paneli](web/public/novusmesh_banner.png) 
+İstər istehsalat (production) infrastrukturunu idarə edin, istərsə də sadəcə şəxsi şəbəkənizə tam sahib olmaq istəyin — **NovusMesh sizə aydınlıq, təhlükəsizlik və nəzarət bəxş edir**.
 
+![NovusMesh Dashboard](web/public/novusmesh_banner.png)
+
+---
+
+## ✨ Niyə NovusMesh?
+
+Bu gün mövcud olan VPN həllərinin əksəriyyəti ya:
+- ❌ "Qara qutu" kimi işləyən SaaS həlləridir
+- ❌ Böyük miqyasda idarə edilməsi çətindir
+- ❌ Kiçik komandalar üçün həddindən artıq mürəkkəbdir
+- ❌ Ya da öz serverində qurmaq (self-host) çox ağrılıdır
+
+**NovusMesh fərqli olmaq üçün yaradılıb.**
+
+O, diqqəti bunlara yönəldir:
+- **Rahatlıqdan öncə Sahiblik**
+- **Mürəkkəblikdən öncə Sadəlik**
+- **Mücərrədlikdən öncə Şəffaflıq**
+
+Onu siz işlədirsiniz.
+Siz idarə edirsiniz.
+Sizin şəbəkəniz — sizin qaydalarınız.
+
+---
 
 ## 🚀 Əsas Xüsusiyyətlər
 
-- **Hub-and-Spoke Mesh:** Mərkəzləşdirilmiş idarəetmə ilə birbaşa peer-to-peer (cihazdan-cihaza) imkanları.
-- **Müasir Web Dashboard:** Qovşaqları (nodes) idarə etmək və şəbəkə trafikini vizuallaşdırmaq üçün React əsaslı gözəl istifadəçi interfeysi.
-- **Bir Kliklə Quraşdırıcı:** Xüsusi quraşdırıcı aləti (Installer) vasitəsilə asan yerləşdirmə və yeniləmə.
-- **Ağıllı Yeniləmələr:** Məlumatları və ya konfiqurasiyaları itirmədən sisteminizi yeniləyin.
-- **Defolt Olaraq Təhlükəsiz:** Daxili kommunikasiya üçün JWT və API açarları ilə yanaşı, WireGuard-ın ən müasir kriptoqrafiyasından istifadə edir.
-- **Lokalizasiya:** İngilis dili (standart) və Azərbaycan dili dəstəyi.
+- **Hub-and-Spoke Arxitekturası**
+  Qovşaqlar arasında trafikin mərkəzi server vasitəsilə təhlükəsiz yönləndirilməsi.
+
+- **Müasir Veb Dashboard**
+  Qovşaqları idarə etmək, trafiki izləmək və şəbəkəyə nəzarət etmək üçün React əsaslı gözəl interfeys.
+
+- **Bir Kliklə Quraşdırıcı**
+  Xüsusi Docker əsaslı quraşdırıcı (installer) ilə NovusMesh-i asanlıqla yerləşdirin və yeniləyin.
+
+- **Təhlükəsiz və Ağıllı Yeniləmələr**
+  Konfiqurasiyanı və ya şəbəkə vəziyyətini itirmədən sisteminizi yeniləyin.
+
+- **Defolt Olaraq Təhlükəsiz**
+  WireGuard kriptoqrafiyası, JWT autentifikasiyası və daxili kommunikasiya üçün API açarları.
+
+
+---
+
+## 👥 NovusMesh Kimlər Üçündür?
+
+- **Sistem Adminləri** — serverlər və məlumat mərkəzləri arasında təhlükəsiz giriş təmin edənlər
+- **DevOps Mühəndisləri** — infrastrukturu müxtəlif mühitlər (environments) arasında birləşdirənlər
+- **Proqramçılar** — daxili və ya self-hosted platformalar quranlar
+- **Məxfilik sevənlər** — öz VPN quruluşuna tam nəzarət etmək istəyənlər
+
+Əgər **self-hosting, təhlükəsizlik və sadəliyə** dəyər verirsinizsə, NovusMesh sizin üçündür.
+
+---
+
+## 🧠 Necə İşləyir? (Qısa İzah)
+
+1. **Mərkəzi server** idarəetmə paneli (control plane) rolunu oynayır.
+2. Cihazlar qeydiyyatdan keçir və təhlükəsiz şəkildə autentifikasiya olunur.
+3. WireGuard tunelləri avtomatik olaraq qurulur.
+4. Trafik mərkəzi server üzərindən təhlükəsiz şəkildə yönləndirilir.
+
+Gizli sehir yoxdur.
+Vendor asılılığı (lock-in) yoxdur.
+Sadəcə təmiz şəbəkəçilik.
+
+---
 
 ## 📂 Sistem Memarlığı
 
-Layihə üç əsas komponentə bölünür:
+NovusMesh maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys və yerləşdirməni ayıran **modul sistem** kimi dizayn edilib.
 
-### 1. [Server (Backend)](./server)
-**Go** dilində yazılmış əsas məntiq. WireGuard interfeysini, verilənlər bazasını (SQLite) idarə edir və REST API təqdim edir.
-- **Sənədlər:** [Developer Guide (AZ)](./server/DEVELOPER_GUIDE_AZ.md) | [User Guide (AZ)](./server/USER_GUIDE_AZ.md)
+### 1. Server (Backend)
+📁 `./server`
 
-### 2. [Web (Frontend)](./web)
-**React**, **TypeScript** və **Tailwind CSS** ilə yazılmış inzibatçı interfeysi.
-- **Sənədlər:** [Developer Guide (AZ)](./web/DEVELOPER_GUIDE_AZ.md) | [User Guide (AZ)](./web/USER_GUIDE_AZ.md)
+**Go** dilində yazılmış əsas məntiq.
+WireGuard interfeysini, verilənlər bazasını (SQLite) idarə edir və REST API təqdim edir.
 
-### 3. [Installer (Quraşdırıcı)](./installer)
-Linux serverlərində SSH vasitəsilə yerləşdirməni sadələşdirmək üçün müstəqil Node.js aləti.
-- **Sənədlər:** [Developer Guide (AZ)](./installer/DEVELOPER_GUIDE_AZ.md) | [User Guide (AZ)](./installer/USER_GUIDE_AZ.md)
+- **Developer Guide:** `./server/DEVELOPER_GUIDE_AZ.md`
+- **User Guide:** `./server/USER_GUIDE_AZ.md`
 
-> 🇺🇸 **English Documentation:**
+---
+
+### 2. Web Dashboard (Frontend)
+📁 `./web`
+
+**React**, **TypeScript** və **Tailwind CSS** ilə qurulmuş inzibatçı interfeysi.
+
+- **Developer Guide:** `./web/DEVELOPER_GUIDE_AZ.md`
+- **User Guide:** `./web/USER_GUIDE_AZ.md`
+
+---
+
+### 3. Installer (Quraşdırıcı)
+📁 `./installer`
+
+Linux serverlərində SSH vasitəsilə yerləşdirməni sadələşdirmək üçün müstəqil **Node.js** aləti.
+
+- **Developer Guide:** `./installer/DEVELOPER_GUIDE_AZ.md`
+- **User Guide:** `./installer/USER_GUIDE_AZ.md`
+
+---
+
+> 🇺🇸 **English Documentation**
 > Refer to [README.md](./README.md) for the English version.
+
+---
 
 ## ⚡ Tez Başlanğıc
 
 ### Tələblər
-- Linux server (Ubuntu 20.04/22.04 tövsiyə olunur).
-- Yerli kompüterinizdə Docker və Docker Compose quraşdırılmalıdır (quraşdırıcı üçün).
 
-### Installer Vasitəsilə Quraşdırma
-1. Installer qovluğuna keçin:
-   ```bash
-   cd installer
-   ```
-2. Quraşdırıcı interfeysini işə salın:
-   ```bash
-   docker-compose up -d --build
-   ```
-3. Brauzerinizdə `http://localhost:3017` ünvanını açın.
-4. Uzaq server məlumatlarınızı daxil edin və **Install NovusMesh Server** düyməsini sıxın.
-5. Quraşdırma bitdikdən sonra Web Dashboard-u işə salın:
-   ```bash
-   cd ../web
-   docker-compose up -d --build
-   ```
-6. Paneli `http://localhost:3007` ünvanında açın.
-   - **Giriş:** `admin`
-   - **Şifrə:** Quraşdırma zamanı ekranda göstərilən şifrə.
+- Linux server (Ubuntu 20.04 / 22.04 tövsiyə olunur)
+- Yerli kompüterdə Docker və Docker Compose (quraşdırıcı üçün)
+
+---
+
+### Installer Vasitəsilə Quraşdırma (Tövsiyə Olunan)
+
+```bash
+cd installer
+docker-compose up -d --build
+```
+
+1. Brauzerdə `http://localhost:3017` ünvanını açın.
+2. Uzaq server məlumatlarınızı daxil edin.
+3. **Install NovusMesh Server** düyməsini sıxın.
+4. Quraşdırma bitdikdən sonra Web Dashboard-u işə salın:
+
+```bash
+cd ../web
+docker-compose up -d --build
+```
+
+5. Paneli `http://localhost:3007` ünvanında açın.
+
+**Giriş:** `admin`
+**Şifrə:** Quraşdırma zamanı göstərilir.
+
+---
 
 ### Əl ilə Quraşdırma (Manual)
-Əl ilə Docker yerləşdirmə təlimatları üçün [Server İstifadəçi Təlimatına](./server/USER_GUIDE_AZ.md) baxın.
 
-## 🛡️ Təhlükəsizlik
+Təcrübəli istifadəçilər üçün:
+👉 **[Server İstifadçi Təlimatı](./server/USER_GUIDE_AZ.md)**
 
-- **Giriş Məlumatları:** Quraşdırıcı, quraşdırma zamanı unikal şifrələr və açarlar yaradır. **Onları dərhal yadda saxlayın.**
-- **Portlar:** Serverinizin firewall-unda UDP `51820` portunun açıq olduğundan əmin olun.
-- **HTTPS:** İstehsalat (production) mühitində istifadə üçün Web Dashboard-u SSL ilə tərs proksi (Nginx/Caddy) arxasında işlətməyinizi şiddətlə tövsiyə edirik.
+---
+
+## 🛡️ Təhlükəsizlik Qeydləri
+
+* Quraşdırıcı **unikal giriş məlumatları** yaradır — onları dərhal yadda saxlayın.
+* UDP port **51820**-nin açıq olduğundan əmin olun.
+* İstehsalat (production) mühitində Web Dashboard-u **Nginx və ya Caddy (SSL ilə)** arxasında işlədin.
+
+Təhlükəsizlik seçim deyil — bu, standartdır.
+
+---
 
 ## 📸 Ekran Görüntüləri (Screenshots)
 
@@ -89,8 +185,27 @@ Linux serverlərində SSH vasitəsilə yerləşdirməni sadələşdirmək üçü
   <img src="web/public/photo/installer/1.png" alt="Installer 1" width="45%">
 </div>
 
+---
+
 ## 🤝 Töhfə Vermək (Contributing)
-Töhfələrinizi gözləyirik! Memarlıq detalları və kod standartları üçün [Developer Təlimatlarına](./server/DEVELOPER_GUIDE_AZ.md) baxın.
+
+Töhfələrinizi gözləyirik ❤️
+Xəta hesabatları (Bug reports), yeni funksiya təklifləri və Pull Request-lər yüksək qiymətləndirilir.
+
+Töhfə verməzdən əvvəl zəhmət olmasa **Developer Təlimatlarını** oxuyun.
+
+---
+
+## ⭐ Layihəyə Dəstək
+
+Əgər **NovusMesh** sizin üçün faydalıdırsa:
+
+* ⭐ Repozitoriyaya ulduz (Star) verin
+* 🐛 Xətalar barədə məlumat verin (Issues)
+* 💡 Yeni ideyalar təklif edin
+* 📣 Başqaları ilə paylaşın
+
+Açıq-qaynaq (Open-source) icma ilə yaşayır.
 
 ---
 
