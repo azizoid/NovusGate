@@ -12,7 +12,7 @@ NovusMesh idarəetmə interfeysinə xoş gəlmisiniz. Bu alət sizə sadə veb p
 
 ### İdarə Panelinə Giriş
 1. Installer konteynerinin işlədiyindən əmin olun.
-2. Veb brauzerinizi açın və daxil olun: `http://localhost:3000`
+2. Veb brauzerinizi açın və daxil olun: `http://localhost:3017`
 
 ## İdarə Olunan Serverlər
 

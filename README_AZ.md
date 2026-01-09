@@ -50,8 +50,16 @@ Linux serverlərində SSH vasitəsilə yerləşdirməni sadələşdirmək üçü
    ```bash
    docker-compose up -d --build
    ```
-3. Brauzerinizdə `http://localhost:3000` ünvanını açın.
+3. Brauzerinizdə `http://localhost:3017` ünvanını açın.
 4. Uzaq server məlumatlarınızı daxil edin və **Install NovusMesh Server** düyməsini sıxın.
+5. Quraşdırma bitdikdən sonra Web Dashboard-u işə salın:
+   ```bash
+   cd ../web
+   docker-compose up -d --build
+   ```
+6. Paneli `http://localhost:3007` ünvanında açın.
+   - **Giriş:** `admin`
+   - **Şifrə:** Quraşdırma zamanı ekranda göstərilən şifrə.
 
 ### Əl ilə Quraşdırma (Manual)
 Əl ilə Docker yerləşdirmə təlimatları üçün [Server İstifadəçi Təlimatına](./server/USER_GUIDE_AZ.md) baxın.

@@ -12,7 +12,7 @@ Welcome to the NovusMesh management interface. This tool allows you to easily in
 
 ### Accessing the Dashboard
 1. Ensure the installer container is running.
-2. Open your web browser and navigate to: `http://localhost:3000`
+2. Open your web browser and navigate to: `http://localhost:3017`
 
 ## Managed Servers
 

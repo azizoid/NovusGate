@@ -50,8 +50,16 @@ A standalone Node.js tool to simplify deployment on Linux servers via SSH.
    ```bash
    docker-compose up -d --build
    ```
-3. Open your browser at `http://localhost:3000`.
+3. Open your browser at `http://localhost:3017`.
 4. Add your remote server credentials and click **Install NovusMesh Server**.
+5. Once installation is complete, start the Web Dashboard:
+   ```bash
+   cd ../web
+   docker-compose up -d --build
+   ```
+6. Open the panel at `http://localhost:3007`.
+   - **Login:** `admin`
+   - **Password:** The password shown during installation.
 
 ### Manual Installation
 Refer to the [Server User Guide](./server/USER_GUIDE.md) for manual Docker deployment instructions.
