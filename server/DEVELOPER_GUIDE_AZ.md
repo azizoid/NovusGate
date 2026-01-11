@@ -1,82 +1,315 @@
-# NovusMesh Server - Developer Guide (Azərbaycan)
+# NovusMesh Server - Developer Təlimatı
 
-## İcmal (Overview)
-**NovusMesh Server**, WireGuard mesh şəbəkəsinin əsasını təşkil edən komponentdir. O, "peer"-lərin koordinasiyasını, konfiqurasiya paylanmasını, açarların idarə edilməsini və idarə paneli üçün API çıxışını təmin edir. **Go** dilində yazılmışdır və yüksək performanslı, bulud-yönümlü (cloud-native) olması üçün nəzərdə tutulmuşdur.
+## İcmal
 
-## Memarlıq (Architecture)
+**NovusMesh Server**, WireGuard mesh şəbəkə overlay-ini idarə edən əsas komponentdir. Peer koordinasiyası, konfiqurasiya paylanması, açar idarəetməsi və dashboard üçün API girişini təmin edir. **Go** dilində yazılıb və yüksək performanslı, cloud-native dizayn edilib.
 
-### Texnologiyalar
-- **Dil:** Go 1.21+
-- **Verilənlər Bazası:** SQLite (CGO vasitəsilə daxili) və ya PostgreSQL
-- **VPN Protokolu:** WireGuard (`wg-quick` və kernel modulları vasitəsilə)
-- **API:** HTTP üzərindən REST/JSON
-- **Təhlükəsizlik:** API sorğuları üçün JWT (JSON Web Tokens)
+## Arxitektura
 
-### Fayl Strukturu
+### Texnologiya Yığını
+| Komponent | Texnologiya |
+|-----------|-------------|
+| Dil | Go 1.23+ |
+| Verilənlər Bazası | PostgreSQL 16 |
+| VPN Protokolu | WireGuard (`wg-quick` və kernel modulları) |
+| API | REST/JSON HTTP üzərindən |
+| Autentifikasiya | JWT (JSON Web Tokens) + API Key |
+| Router | Gorilla Mux |
+
+### Qovluq Strukturu
 ```
 server/
 ├── cmd/
-│   └── novusmesh-server/  # Əsas giriş nöqtəsi (main.go)
+│   └── control-plane/
+│       └── main.go           # Əsas giriş nöqtəsi (CLI əmrləri)
 ├── internal/
-│   ├── controlplane/      # Biznes məntiqi & Bazası təbəqəsi
-│   │   ├── api/           # REST API handler-ləri
-│   │   ├── db/            # Baza saxlama implementasiyaları
-│   │   └── config/        # Ətraf mühit dəyişənlərinin oxunması
-│   ├── wireguard/         # WireGuard interfeysinin idarə edilməsi
-│   └── shared/            # Ümumi köməkçi funksiyalar
-├── deployments/           # Docker və systemd konfiqurasiyaları
-└── Makefile               # Quraşdırma skriptləri
+│   ├── controlplane/
+│   │   ├── api/
+│   │   │   └── rest/
+│   │   │       └── handlers.go   # REST API handler-ləri
+│   │   └── store/
+│   │       └── store.go          # PostgreSQL verilənlər bazası əməliyyatları
+│   ├── wireguard/
+│   │   ├── manager.go            # WireGuard interfeys idarəetməsi
+│   │   ├── keys.go               # Açar yaratma
+│   │   ├── config_generator.go   # Konfiqurasiya yaratma
+│   │   └── install_script.go     # Client quraşdırma skripti
+│   └── shared/
+│       └── models/
+│           └── models.go         # Data modelləri
+├── deployments/
+│   └── docker/
+│       ├── docker-compose.yml    # Orkestrasiya
+│       ├── Dockerfile.control-plane
+│       └── setup-firewall.sh     # Firewall konfiqurasiyası
+├── go.mod                        # Go modulları
+└── go.sum                        # Asılılıq hash-ləri
 ```
 
 ## Əsas Modullar
 
-### 1. Control Plane (İdarəetmə Müstəvisi)
-`internal/controlplane` daxilində yerləşir və sistemin "beyni" rolunu oynayır.
-- **Peers:** Mesh qovşaqlarının həyat dövrünü idarə edir (Yaratmaq, Silmək, IP yeniləmək).
-- **IPAM:** WireGuard interfeysi üçün IP ünvanlarının paylanmasını həll edir (məsələn, `10.10.0.x`).
-- **Config Distribution:** Müştərilər üçün etibarlı WireGuard konfiqurasiyalarını yaradır və servis edir.
+### 1. Control Plane (`internal/controlplane`)
 
-### 2. WireGuard Manager
-`internal/wireguard` daxilində yerləşir.
-- **İnterfeys İdarəçiliyi:** `wg0` interfeysini yaradır və konfiqurasiya edir.
-- **Key Generation:** Serverin özü üçün Şəxsi/İctimai (Private/Public) açarları yaradır.
-- **Peer Sync:** Verilənlər bazasındakı vəziyyəti real kernel WireGuard interfeysi ilə sinxronlaşdırır.
+Bu modul sistemin "beyni" rolunu oynayır.
 
-### 3. API Layer
-Veb İdarə Paneli və Installer üçün giriş nöqtələrini (endpoints) təmin edir.
-- `GET /api/v1/nodes`: Aktiv peer-ləri siyahıya almaq.
-- `POST /api/v1/nodes`: Yeni peer daxil etmək (enroll).
-- `GET /api/v1/config`: Serverin öz ictimai konfiqurasiyasını əldə etmək.
+#### API Layer (`api/rest/handlers.go`)
+REST API endpoint-lərini təmin edir:
 
-## İnkişaf Mühitinin Qurulması (Development Setup)
+| Metod | Endpoint | Təsvir |
+|-------|----------|--------|
+| `POST` | `/api/v1/auth/login` | İstifadəçi girişi |
+| `PUT` | `/api/v1/auth/password` | Parol dəyişmə |
+| `GET` | `/api/v1/networks` | Şəbəkələri siyahıla |
+| `POST` | `/api/v1/networks` | Yeni şəbəkə yarat |
+| `DELETE` | `/api/v1/networks/{id}` | Şəbəkəni sil |
+| `GET` | `/api/v1/networks/{networkId}/nodes` | Node-ları siyahıla |
+| `POST` | `/api/v1/networks/{networkId}/servers` | Yeni server/peer yarat |
+| `GET` | `/api/v1/nodes/{id}` | Node məlumatı |
+| `PUT` | `/api/v1/nodes/{id}` | Node yenilə |
+| `DELETE` | `/api/v1/nodes/{id}` | Node sil |
+| `GET` | `/api/v1/nodes/{id}/config` | WireGuard konfiqurasiyası |
+| `GET` | `/api/v1/nodes/{id}/qrcode` | QR kod şəkli |
+| `GET` | `/api/v1/users` | İstifadəçiləri siyahıla |
+| `POST` | `/api/v1/users` | Yeni istifadəçi yarat |
+| `DELETE` | `/api/v1/users/{id}` | İstifadəçi sil |
+| `GET` | `/health` | Sağlamlıq yoxlaması |
 
-### Tələblər
-- Go 1.21+ quraşdırılmalıdır.
-- GCC (SQLite CGO üçün lazımdır).
-- Host sistemdə WireGuard alətləri (`wg`, `wg-quick`).
+#### Store Layer (`store/store.go`)
+PostgreSQL verilənlər bazası əməliyyatları:
 
-### Yerli İşə Salın
-1. **Daxil olun:**
-   ```bash
-   cd server
-   ```
+```go
+// Əsas funksiyalar
+func (s *Store) CreateNetwork(ctx, network) error
+func (s *Store) GetNetwork(ctx, id) (*Network, error)
+func (s *Store) ListNetworks(ctx) ([]*Network, error)
+func (s *Store) DeleteNetwork(ctx, id) error
 
-2. **Mühiti qurun:**
-   `.env` faylı yaradın və ya dəyişənləri ixrac edin:
-   ```bash
-   export DB_PASSWORD="change_me"
-   export JWT_SECRET="dev_secret_123"
-   export API_KEY="dev_api_key"
-   ```
+func (s *Store) CreateNode(ctx, node) error
+func (s *Store) GetNode(ctx, id) (*Node, error)
+func (s *Store) ListNodes(ctx, networkID) ([]*Node, error)
+func (s *Store) UpdateNode(ctx, node) error
+func (s *Store) DeleteNode(ctx, id) error
+func (s *Store) AllocateIP(ctx, networkID) (net.IP, error)
 
-3. **İşə salın:**
-   ```bash
-   go run ./cmd/novusmesh-server serve
-   ```
-
-### Build (Quraşdırma)
-Makefile istifadə edərək asanlıqla build edə bilərsiniz:
-```bash
-make build       # bin/novusmesh-server faylını yaradır
-make docker      # Docker imicini yaradır
+func (s *Store) CreateUser(ctx, user) error
+func (s *Store) GetUserByUsername(ctx, username) (*User, error)
+func (s *Store) UpdateUserPassword(ctx, username, hash) error
 ```
+
+### 2. WireGuard Manager (`internal/wireguard`)
+
+WireGuard interfeyslərini idarə edir.
+
+#### manager.go
+```go
+type Manager struct {
+    InterfaceName string  // wg0, wg1, ...
+    ConfigPath    string  // /etc/wireguard/wg0.conf
+}
+
+// Əsas metodlar
+func (m *Manager) Init() error                    // wg əmrinin mövcudluğunu yoxla
+func (m *Manager) Up() error                      // wg-quick up
+func (m *Manager) Down() error                    // wg-quick down
+func (m *Manager) AddPeer(pubKey, allowedIPs)     // Peer əlavə et
+func (m *Manager) RemovePeer(pubKey)              // Peer sil
+func (m *Manager) GetPeers() map[string]PeerStatus // Peer statusları
+func (m *Manager) GetPublicKey() (string, error)  // Server public key
+```
+
+#### PeerStatus strukturu
+```go
+type PeerStatus struct {
+    PublicKey           string
+    Endpoint            string
+    AllowedIPs          string
+    LatestHandshakeTime int64   // Unix timestamp
+    TransferRx          int64   // Bytes received
+    TransferTx          int64   // Bytes sent
+}
+```
+
+### 3. Data Modelləri (`internal/shared/models`)
+
+#### Network
+```go
+type Network struct {
+    ID               string    // UUID
+    Name             string    // "Admin Management", "Office VPN"
+    CIDR             string    // "10.10.0.0/24"
+    ServerPrivateKey string    // WireGuard private key (gizli)
+    ServerPublicKey  string    // WireGuard public key
+    ServerEndpoint   string    // "64.225.108.60:51820"
+    ListenPort       int       // 51820, 51821, ...
+    InterfaceName    string    // "wg0", "wg1", ...
+    CreatedAt        time.Time
+    UpdatedAt        time.Time
+}
+```
+
+#### Node
+```go
+type Node struct {
+    ID         string            // UUID
+    NetworkID  string            // Hansı şəbəkəyə aid
+    Name       string            // "Əlinin Laptopı"
+    VirtualIP  net.IP            // 10.10.0.5
+    PublicKey  string            // Client public key
+    Labels     map[string]string // Metadata
+    Status     NodeStatus        // pending/online/offline/expired
+    LastSeen   time.Time
+    PublicIP   string            // Real IP (endpoint-dən)
+    TransferRx int64             // Download bytes
+    TransferTx int64             // Upload bytes
+    ExpiresAt  *time.Time        // Bitmə vaxtı (optional)
+    NodeInfo   *NodeInfo         // OS, arch, hostname
+    CreatedAt  time.Time
+}
+```
+
+#### NodeStatus
+```go
+const (
+    NodeStatusPending NodeStatus = "pending"   // Konfiqurasiya gözləyir
+    NodeStatusOnline  NodeStatus = "online"    // Aktiv bağlantı
+    NodeStatusOffline NodeStatus = "offline"   // Bağlantı yoxdur
+    NodeStatusExpired NodeStatus = "expired"   // Vaxtı bitib
+)
+```
+
+## CLI Əmrləri
+
+Server `cobra` kitabxanası ilə CLI təmin edir:
+
+```bash
+# Serveri işə sal
+novusmesh-server serve --listen :8080 --grpc-listen :8443
+
+# Verilənlər bazası miqrasiyası
+novusmesh-server migrate --database "postgres://..."
+
+# Şəbəkə inisializasiyası
+novusmesh-server init --name "Admin Network" --cidr "10.99.0.0/24"
+
+# Versiya
+novusmesh-server version
+```
+
+## Middleware-lər
+
+### 1. AuthMiddleware
+JWT token yoxlaması:
+```go
+// Authorization: Bearer <token>
+// /health və /login endpoint-ləri istisnadır
+```
+
+### 2. APIKeyMiddleware
+API açar yoxlaması:
+```go
+// X-API-Key: <key>
+// Dev mode-da (boş key) atlanır
+```
+
+### 3. LoggingMiddleware
+Request logging (hazırda placeholder).
+
+## Mühit Dəyişənləri
+
+| Dəyişən | Təsvir | Default |
+|---------|--------|---------|
+| `DATABASE_URL` | PostgreSQL bağlantı string-i | Məcburi |
+| `novusmesh_LISTEN` | HTTP API portu | `:8080` |
+| `novusmesh_GRPC_LISTEN` | gRPC portu | `:8443` |
+| `JWT_SECRET` | Token imzalama açarı | Məcburi |
+| `novusmesh_API_KEY` | API açarı | Məcburi |
+| `ADMIN_USERNAME` | İlk admin istifadəçi adı | `admin` |
+| `ADMIN_PASSWORD` | İlk admin parolu | Məcburi |
+| `WG_SERVER_ENDPOINT` | Server public IP | Məcburi |
+| `ADMIN_CIDR` | Admin şəbəkə CIDR | `10.99.0.0/24` |
+
+## Docker Yerləşdirmə
+
+### docker-compose.yml strukturu
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Verilənlər bazası
+
+  control-plane:
+    build: ...
+    network_mode: host      # WireGuard üçün vacib!
+    cap_add:
+      - NET_ADMIN           # Şəbəkə idarəetməsi
+      - SYS_MODULE          # Kernel modulları
+    volumes:
+      - /etc/wireguard:/etc/wireguard:rw  # Host WireGuard
+
+  web:
+    build: ...
+    network_mode: host
+```
+
+### Vacib Qeydlər
+- `network_mode: host` - WireGuard trafikinin düzgün işləməsi üçün
+- `/etc/wireguard` mount - Host-un WireGuard konfiqurasiyasına giriş
+- `NET_ADMIN` capability - Şəbəkə interfeyslərini idarə etmək üçün
+
+## İnkişaf
+
+### Yerli İnkişaf
+```bash
+cd server
+
+# Asılılıqları yüklə
+go mod download
+
+# Mühit dəyişənlərini təyin et
+export DATABASE_URL="postgres://novusmesh:password@localhost:5432/novusmesh?sslmode=disable"
+export JWT_SECRET="dev_secret"
+export novusmesh_API_KEY="dev_key"
+export ADMIN_PASSWORD="admin123"
+
+# İşə sal
+go run ./cmd/control-plane serve
+```
+
+### Build
+```bash
+# Binary build
+go build -o novusmesh-server ./cmd/control-plane
+
+# Docker build
+docker build -f deployments/docker/Dockerfile.control-plane -t novusmesh-server .
+```
+
+### Test
+```bash
+go test ./...
+```
+
+## Təhlükəsizlik
+
+1. **JWT Tokenləri** - Hər startup-da yeni admin token yaradılır
+2. **API Key** - Bütün API çağırışları üçün tələb olunur
+3. **Bcrypt** - Parollar hash-lənir
+4. **VPN Arxasında** - Admin panel yalnız wg0 üzərindən əlçatandır
+5. **CORS** - Bütün origin-lərə icazə (development üçün)
+
+## Problemlərin Həlli
+
+| Problem | Səbəb | Həll |
+|---------|-------|------|
+| "wg command not found" | WireGuard quraşdırılmayıb | `apt install wireguard-tools` |
+| "permission denied" | NET_ADMIN capability yoxdur | Docker-da `cap_add` yoxla |
+| "database connection refused" | PostgreSQL işləmir | Container statusunu yoxla |
+| "interface already exists" | wg0 artıq var | `wg-quick down wg0` |
+| Peer-lər görünmür | Manager init olmayıb | Server loglarını yoxla |
+
+## Töhfə Vermək
+
+1. **Kod Stili** - `gofmt` və Go idiomlarına əməl edin
+2. **Test** - `internal/` üçün unit testlər əlavə edin
+3. **Miqrasiya** - Sxem dəyişiklikləri SQL miqrasiya faylları kimi əlavə edilməlidir
+4. **Sənədləşdirmə** - Yeni xüsusiyyətlər üçün təlimatları yeniləyin

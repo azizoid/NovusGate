@@ -5,6 +5,8 @@ export interface Network {
   cidr: string;
   server_public_key?: string;  // Hub's public key
   server_endpoint?: string;    // Hub's endpoint (IP:Port)
+  listen_port?: number;        // UDP Port
+  interface_name?: string;     // WireGuard Interface (wg0, etc)
   created_at: string;
   updated_at: string;
   node_count?: number;

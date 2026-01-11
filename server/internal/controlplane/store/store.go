@@ -53,9 +53,9 @@ func (s *Store) CreateNetwork(ctx context.Context, network *models.Network) erro
 	network.UpdatedAt = time.Now()
 	
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO networks (id, name, cidr, server_private_key, server_public_key, server_endpoint, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, network.ID, network.Name, network.CIDR, network.ServerPrivateKey, network.ServerPublicKey, network.ServerEndpoint, network.CreatedAt, network.UpdatedAt)
+		INSERT INTO networks (id, name, cidr, server_private_key, server_public_key, server_endpoint, listen_port, interface_name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, network.ID, network.Name, network.CIDR, network.ServerPrivateKey, network.ServerPublicKey, network.ServerEndpoint, network.ListenPort, network.InterfaceName, network.CreatedAt, network.UpdatedAt)
 	
 	return err
 }
@@ -65,9 +65,9 @@ func (s *Store) GetNetwork(ctx context.Context, id string) (*models.Network, err
 	var network models.Network
 	var serverPrivateKey, serverPublicKey, serverEndpoint sql.NullString
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, created_at, updated_at
+		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, listen_port, interface_name, created_at, updated_at
 		FROM networks WHERE id = $1
-	`, id).Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.CreatedAt, &network.UpdatedAt)
+	`, id).Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.ListenPort, &network.InterfaceName, &network.CreatedAt, &network.UpdatedAt)
 	
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -83,9 +83,9 @@ func (s *Store) GetNetworkByName(ctx context.Context, name string) (*models.Netw
 	var network models.Network
 	var serverPrivateKey, serverPublicKey, serverEndpoint sql.NullString
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, created_at, updated_at
+		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, listen_port, interface_name, created_at, updated_at
 		FROM networks WHERE name = $1
-	`, name).Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.CreatedAt, &network.UpdatedAt)
+	`, name).Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.ListenPort, &network.InterfaceName, &network.CreatedAt, &network.UpdatedAt)
 	
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -99,7 +99,7 @@ func (s *Store) GetNetworkByName(ctx context.Context, name string) (*models.Netw
 // ListNetworks lists all networks
 func (s *Store) ListNetworks(ctx context.Context) ([]*models.Network, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, created_at, updated_at
+		SELECT id, name, cidr, server_private_key, server_public_key, server_endpoint, listen_port, interface_name, created_at, updated_at
 		FROM networks ORDER BY name
 	`)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *Store) ListNetworks(ctx context.Context) ([]*models.Network, error) {
 	for rows.Next() {
 		var network models.Network
 		var serverPrivateKey, serverPublicKey, serverEndpoint sql.NullString
-		if err := rows.Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.CreatedAt, &network.UpdatedAt); err != nil {
+		if err := rows.Scan(&network.ID, &network.Name, &network.CIDR, &serverPrivateKey, &serverPublicKey, &serverEndpoint, &network.ListenPort, &network.InterfaceName, &network.CreatedAt, &network.UpdatedAt); err != nil {
 			return nil, err
 		}
 		network.ServerPrivateKey = serverPrivateKey.String
@@ -125,6 +125,21 @@ func (s *Store) ListNetworks(ctx context.Context) ([]*models.Network, error) {
 // DeleteNetwork deletes a network
 func (s *Store) DeleteNetwork(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM networks WHERE id = $1`, id)
+	return err
+}
+
+// UpdateNetworkCIDR updates the CIDR of a network
+func (s *Store) UpdateNetworkCIDR(ctx context.Context, id, cidr string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE networks SET cidr = $1, updated_at = $2 WHERE id = $3`, cidr, time.Now(), id)
+	return err
+}
+
+// UpdateNetworkKeys updates the WireGuard keys of a network
+func (s *Store) UpdateNetworkKeys(ctx context.Context, id, privateKey, publicKey string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE networks SET server_private_key = $1, server_public_key = $2, updated_at = $3 
+		WHERE id = $4
+	`, privateKey, publicKey, time.Now(), id)
 	return err
 }
 

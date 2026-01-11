@@ -321,6 +321,61 @@
       </form>
     </div>
   </div>
+    <!-- Config Modal -->
+    <div id="configModal" class="modal">
+      <div class="modal-content">
+        <h2 id="configTitle">⚙️ Installation Configuration</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">Customize your NovusMesh deployment.</p>
+        
+        <form id="installConfigForm" onsubmit="event.preventDefault(); confirmInstall();">
+          <!-- Admin User -->
+          <div class="form-group">
+            <label>Admin Username</label>
+            <input type="text" id="confAdminUser" value="admin" required>
+          </div>
+          
+          <!-- Admin Pass -->
+          <div class="form-group">
+            <label>Admin Password <small>(Leave empty to auto-generate)</small></label>
+            <input type="text" id="confAdminPass" placeholder="Auto-generate secure password">
+          </div>
+          
+          <div style="border-top: 1px solid #333; margin: 15px 0;"></div>
+          
+          <!-- Admin Network IP -->
+          <div class="form-group">
+            <label>Admin Network Gateway IP</label>
+            <input type="text" id="confVpnIp" value="10.99.0.1" required placeholder="e.g. 10.99.0.1">
+            <small style="color: var(--text-muted)">The internal IP for the Admin Panel (wg0)</small>
+          </div>
+
+          <div style="border-top: 1px solid #333; margin: 15px 0;"></div>
+
+          <!-- Database Config -->
+          <h4 style="color: var(--accent); margin-bottom: 10px;">🗄️ Database Settings</h4>
+          
+          <div class="form-group">
+            <label>Database Name</label>
+            <input type="text" id="confDbName" value="novusmesh" required>
+          </div>
+          
+          <div class="form-group">
+            <label>Database User</label>
+            <input type="text" id="confDbUser" value="novusmesh" required>
+          </div>
+          
+          <div class="form-group">
+            <label>Database Password <small>(Leave empty to auto-generate)</small></label>
+            <input type="text" id="confDbPass" placeholder="Auto-generate secure password">
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Start Installation 🚀</button>
+          </div>
+        </form>
+      </div>
+    </div>
   
   <!-- Output Modal -->
   <div class="modal" id="outputModal">
@@ -353,16 +408,24 @@
             <span style="color: var(--text-muted)">JWT Secret:</span>
             <span id="credJwt" style="color: #a855f7">-</span>
           </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted)">TURN Secret:</span>
-            <span id="credTurn" style="color: #a855f7">-</span>
-          </div>
+
         </div>
         <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); text-align: center;">Copy and save these credentials.</div>
       </div>
 
+      <!-- VPN Config Section -->
+      <div id="vpnConfigSection" style="display: none; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid var(--accent);">
+        <h3 style="color: var(--accent); margin-bottom: 10px;">🔒 Admin VPN Configuration</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
+          You <strong>MUST</strong> connect to this VPN to access the Admin Panel.
+        </p>
+        <textarea id="vpnConfigText" style="display:none;"></textarea>
+        <button class="btn btn-success" onclick="downloadVpnConfig()" style="width: 100%;">📥 Download admin-vpn.conf</button>
+      </div>
+
       <div class="output-log" id="outputLog"></div>
       <div class="modal-actions">
+        <button class="btn btn-warning" onclick="downloadReport()" id="btnDownloadReport" style="display:none; margin-right: auto;">📥 Download Report</button>
         <button class="btn btn-primary" onclick="closeModal('outputModal')">Close</button>
       </div>
     </div>
@@ -371,6 +434,59 @@
   </div>
 
   <script>
+    // ... existing variables ...
+    
+    // START: Report Generation Logic
+    function downloadReport() {
+       const outputLog = document.getElementById('outputLog').textContent;
+       const timestamp = new Date().toLocaleString();
+       const status = outputLog.includes('[DONE] Completed successfully') ? 'SUCCESS' : 'FAILED';
+       
+       // Mask sensitive config for report
+       const safeConfig = currentInstallParams ? JSON.parse(JSON.stringify(currentInstallParams)) : {};
+       if (safeConfig.adminPassword) safeConfig.adminPassword = '***';
+       if (safeConfig.dbPassword) safeConfig.dbPassword = '***';
+       
+       const reportHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+ <title>NovusMesh Install Report</title>
+ <style>
+   body { font-family: monospace; background: #0f172a; color: #f1f5f9; padding: 20px; }
+   .header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+   .status { font-weight: bold; color: ${status === 'SUCCESS' ? '#22c55e' : '#ef4444'}; }
+   .log { background: #000; padding: 15px; border-radius: 8px; white-space: pre-wrap; border: 1px solid #333; }
+   .meta { color: #94a3b8; font-size: 0.9em; margin-bottom: 5px; }
+ </style>
+</head>
+<body>
+ <div class="header">
+   <h1>NovusMesh Installation Report</h1>
+   <div class="meta">Date: ${timestamp}</div>
+   <div class="meta">Status: <span class="status">${status}</span></div>
+   <div class="meta">Server: ${selectedServer ? selectedServer.host : 'Unknown'}</div>
+ </div>
+ 
+ <h3>Configuration:</h3>
+ <pre style="background:#1e293b; padding:10px; border-radius:4px;">${JSON.stringify(safeConfig, null, 2)}</pre>
+ 
+ <h3>Full Installation Log:</h3>
+ <div class="log">${outputLog}</div>
+</body>
+</html>`;
+
+      const blob = new Blob([reportHtml], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `novusmesh-report-${Date.now()}.html`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+    // END: Report Generation Logic
     let servers = [];
     let selectedServer = null;
     let isProcessRunning = false;
@@ -561,7 +677,53 @@
       loadVolumes();
     }
     
+    
+    
+    let activeLogSource = null;
+
     async function dockerAction(container, action) {
+      if (action === 'logs') {
+        // Live Logging
+        if (activeLogSource) activeLogSource.close();
+        
+        const output = document.getElementById('outputLog');
+        output.textContent = 'Connecting to log stream...\n';
+        document.getElementById('outputTitle').textContent = `Logs: ${container}`;
+        document.getElementById('outputModal').classList.add('active');
+        
+        activeLogSource = new EventSource(`/api/servers/${selectedServer.id}/docker/logs/stream?container=${encodeURIComponent(container)}`);
+        
+        activeLogSource.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.text) {
+              output.textContent += data.text;
+              output.scrollTop = output.scrollHeight;
+            }
+            if (data.error) {
+              output.textContent += `\n[ERROR] ${data.error}\n`;
+            }
+            if (data.done) {
+              output.textContent += '\n[Stream closed]\n';
+              activeLogSource.close();
+              activeLogSource = null;
+            }
+          } catch (err) {
+            console.error('Log parse error:', err);
+          }
+        };
+        
+        activeLogSource.onerror = (e) => {
+          console.error('EventSource failed:', e);
+          if (activeLogSource && activeLogSource.readyState === EventSource.CLOSED) {
+             output.textContent += '\n[Connection lost]\n';
+          }
+          // Don't close immediately, let it retry or let user close
+        };
+        return;
+      }
+
+      // Normal Actions
       try {
         const res = await fetch(`/api/servers/${selectedServer.id}/docker/${action}`, {
           method: 'POST',
@@ -569,14 +731,7 @@
           body: JSON.stringify({ container })
         });
         const data = await res.json();
-        
-        if (action === 'logs') {
-          document.getElementById('outputTitle').textContent = `Logs: ${container}`;
-          document.getElementById('outputLog').textContent = data.logs || 'Empty';
-          document.getElementById('outputModal').classList.add('active');
-        } else {
-          await refreshStatus();
-        }
+        await refreshStatus();
       } catch (err) {
         alert('Error: ' + err.message);
       }
@@ -586,6 +741,8 @@
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let vpnConfigBuffer = '';
+      let capturingVpnConfig = false;
       
       while (true) {
         const { done, value } = await reader.read();
@@ -621,9 +778,30 @@
                    const match = text.match(/JWT_SECRET:\s+([^\n]+)/);
                    if (match) document.getElementById('credJwt').textContent = match[1].trim();
                 }
-                if (text.includes('TURN_SECRET:')) {
-                   const match = text.match(/TURN_SECRET:\s+([^\n]+)/);
-                   if (match) document.getElementById('credTurn').textContent = match[1].trim();
+
+
+                // Parse VPN Config
+                if (text.includes('BEGIN_VPN_CONFIG')) {
+                  capturingVpnConfig = true;
+                  vpnConfigBuffer = ''; 
+                }
+                if (capturingVpnConfig) {
+                  // If just started, remove the marker
+                  let content = text;
+                  if (content.includes('BEGIN_VPN_CONFIG')) {
+                     content = content.split('BEGIN_VPN_CONFIG')[1];
+                  }
+                  
+                  if (content.includes('END_VPN_CONFIG')) {
+                     vpnConfigBuffer += content.split('END_VPN_CONFIG')[0];
+                     capturingVpnConfig = false;
+                     
+                     // Show download button
+                     document.getElementById('vpnConfigText').value = vpnConfigBuffer.trim();
+                     document.getElementById('vpnConfigSection').style.display = 'block';
+                  } else {
+                     vpnConfigBuffer += content;
+                  }
                 }
               }
               if (data.done) {
@@ -645,6 +823,9 @@
                 outputLog.textContent += '\n\n[DONE] ' + (data.success ? 'Completed successfully.' : 'Error occurred.');
                 outputLog.scrollTop = outputLog.scrollHeight;
                 isProcessRunning = false;
+                
+                // Show Report Button
+                document.getElementById('btnDownloadReport').style.display = 'inline-block';
                 if (data.success) {
                    loadServers(); // Refresh server status
                    alert('Installation complete! You can access the Admin Dashboard.');
@@ -691,19 +872,53 @@
       await installServer('local', false, false, true);
     }
     
-    async function installServer(source, reinstall = false, update = false, migrateOnly = false) {
-      if (isProcessRunning) {
-        document.getElementById('outputModal').classList.add('active');
-        return;
-      }
+    let currentInstallParams = null;
+
+    function installServer(source, reinstall = false, update = false, migrateOnly = false) {
+      if (!selectedServer) return alert('Please select a server first');
       
-      if (!reinstall && !update && !migrateOnly) {
-         if (!confirm(`Install Server? (${source})`)) return;
+      currentInstallParams = { source, reinstall, update, migrateOnly };
+      
+      if (migrateOnly || update) {
+        // Skip config for updates/migrations
+        startInstallProcess();
+      } else {
+        // Show Config Modal for fresh install / reinstall
+        document.getElementById('configModal').classList.add('active');
+      }
+    }
+    
+    function closeConfigModal() {
+      document.getElementById('configModal').classList.remove('active');
+    }
+
+    function confirmInstall() {
+      closeConfigModal();
+      startInstallProcess();
+    }
+
+    async function startInstallProcess() {
+      const { source, reinstall, update, migrateOnly } = currentInstallParams;
+
+      if (!migrateOnly && !update) {
+          // Confirm one last time
+         if (!confirm(`Are you sure you want to install on ${selectedServer.host}? This might overwrite existing data.`)) return;
       }
 
       document.getElementById('outputModal').classList.add('active');
       const output = document.getElementById('outputLog');
       const title = document.getElementById('outputTitle');
+      
+        // Gather Config
+        const config = {
+          adminUsername: document.getElementById('confAdminUser').value,
+          adminPassword: document.getElementById('confAdminPass').value,
+          // networkName/Cidr removed as we only use Admin Network now
+          vpnIp: document.getElementById('confVpnIp').value,
+          dbName: document.getElementById('confDbName').value,
+          dbUser: document.getElementById('confDbUser').value,
+          dbPassword: document.getElementById('confDbPass').value
+        };
       
       if (migrateOnly) title.textContent = 'Database Migration...';
       else if (update) title.textContent = 'Updating Server...';
@@ -718,23 +933,48 @@
       document.getElementById('credApiKey').textContent = '-';
       document.getElementById('credDbPass').textContent = '-';
       document.getElementById('credJwt').textContent = '-';
-      document.getElementById('credTurn').textContent = '-';
+      document.getElementById('vpnConfigSection').style.display = 'none';
+      document.getElementById('vpnConfigText').value = '';
       
+      console.log('Sending install request with config:', config);
       isProcessRunning = true;
       try {
         const response = await fetch(`/api/servers/${selectedServer.id}/install`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source, reinstall, update, migrateOnly })
+          body: JSON.stringify({ 
+            source, 
+            reinstall, 
+            update, 
+            migrateOnly,
+            ...config // Send config values
+          })
         });
         
+        console.log('Response received:', response.status);
         await streamResponse(response, output);
         await refreshStatus();
       } catch (err) {
+        console.error('Install fetch error:', err);
         output.textContent += `\nError: ${err.message}`;
       } finally {
         isProcessRunning = false;
       }
+    }
+
+    function downloadVpnConfig() {
+      const config = document.getElementById('vpnConfigText').value;
+      if (!config) return alert('No config available');
+      
+      const blob = new Blob([config], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'admin-vpn.conf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     }
 
     
@@ -755,10 +995,18 @@
     }
     
     function closeModal(id) {
-      if (id === 'outputModal' && isProcessRunning) {
-        // Prevent accidental closing, but allow minimizing
-        if (!confirm('Process continues in background. Do you want to hide this window?')) {
-          return;
+      if (id === 'outputModal') {
+        if (activeLogSource) {
+          activeLogSource.close();
+          activeLogSource = null;
+          console.log('Log stream closed by user');
+        }
+        
+        if (isProcessRunning) {
+          // Prevent accidental closing, but allow minimizing
+          if (!confirm('Process continues in background. Do you want to hide this window?')) {
+            return;
+          }
         }
       }
       document.getElementById(id).classList.remove('active');

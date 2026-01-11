@@ -9,6 +9,7 @@ import {
   X,
   ChevronDown,
   LogOut,
+  Activity,
 } from 'lucide-react';
 import { useAppStore, useSidebarOpen } from '../store';
 import { useNetworks } from '../api/client';
@@ -21,7 +22,8 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Overview', href: '/dashboard', icon: <Network className="w-5 h-5" /> },
+  { name: 'Overview', href: '/dashboard', icon: <Activity className="w-5 h-5" /> },
+  { name: 'Networks', href: '/networks', icon: <Network className="w-5 h-5" /> },
   { name: 'Nodes', href: '/nodes', icon: <Server className="w-5 h-5" /> },
   { name: 'Settings', href: '/settings', icon: <Settings className="w-5 h-5" /> },
 ];
@@ -158,15 +160,35 @@ export const Layout: React.FC = () => {
               <Menu className="w-6 h-6" />
             </button>
             
-            <div className="flex items-center gap-4">
-              {/* Notifications */}
-              <button className="relative text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-4">
+               {/* VPN Status Indicator */}
+                {(() => {
+                  const isVpnSecure = window.location.hostname === '10.99.0.1';
+                  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                  
+                  if (isVpnSecure) {
+                    return (
+                       <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium">
+                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                         VPN Connected
+                       </div>
+                    );
+                  } else if (isLocalhost) {
+                    return (
+                        <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-medium">
+                         Dev Mode
+                       </div>
+                    );
+                  } else {
+                     return (
+                       <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium" title="You are accessing via Public IP. This is insecure.">
+                         <div className="w-2 h-2 rounded-full bg-red-500" />
+                         Insecure Connection
+                       </div>
+                    );
+                  }
+                })()}
 
-              {/* User menu */}
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full" />
               </div>

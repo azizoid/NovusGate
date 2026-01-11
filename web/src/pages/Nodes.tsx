@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Search, Server, Trash2, Pencil, Clock, Activity, Laptop, CheckCircle, Copy, Download } from 'lucide-react';
+import { Plus, Search, Server, Trash2, Pencil, Clock, Activity, Laptop, CheckCircle, Copy, Download, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../components/Layout';
 import { Card, Table, Badge, StatusIndicator, Button, Modal, EmptyState } from '../components/ui';
-import { useNodes, useDeleteNode, useCreateServerWithConfig, useNode, useUpdateNode } from '../api/client';
+import { useNodes, useDeleteNode, useCreateServerWithConfig, useNode, useUpdateNode, useNetworks } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { ServerConfigModal } from '../components/ServerConfigModal';
 import { CreateNodeModal } from '../components/CreateNodeModal';
@@ -27,6 +27,9 @@ export const NodesPage: React.FC = () => {
   const deleteNode = useDeleteNode();
   const createServer = useCreateServerWithConfig();
   const updateNode = useUpdateNode();
+  const { data: networks } = useNetworks();
+  const currentNetwork = networks?.find(n => n.id === networkId);
+  const isAdminNetwork = currentNetwork?.interface_name === 'wg0' || currentNetwork?.name === 'Admin Management Network';
   
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -171,19 +174,33 @@ export const NodesPage: React.FC = () => {
       key: 'config',
       header: 'Config',
       className: 'w-10',
-      render: (node: Node) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedNode(node);
-            setShowConfigModal(true);
-          }}
-          className="p-1 text-primary-600 hover:text-primary-700"
-          title="Download Config"
-        >
-          <Download className="w-4 h-4" />
-        </button>
-      ),
+      render: (node: Node) => {
+        // Hide download button for imported nodes (they don't have private keys)
+        const hasPrivateKey = node.labels?.wireguard_private_key;
+        if (!hasPrivateKey) {
+          return (
+            <span
+              className="text-xs text-gray-400"
+              title="Config not available for imported nodes"
+            >
+              -
+            </span>
+          );
+        }
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedNode(node);
+              setShowConfigModal(true);
+            }}
+            className="p-1 text-primary-600 hover:text-primary-700"
+            title="Download Config"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        );
+      },
     },
     {
       key: 'actions',
@@ -236,6 +253,23 @@ export const NodesPage: React.FC = () => {
           </Button>
         }
       />
+
+      {/* Admin Network Warning */}
+      {isAdminNetwork && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">
+              Admin Network Security Warning
+            </h3>
+            <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+              You are viewing the <strong>Admin Management Network (wg0)</strong>. 
+              Nodes created in this network will have access to the Admin Panel and internal management services.
+              Only create peers here for trusted administrators. Do not share these configs with regular users.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -413,9 +447,32 @@ export const NodeDetailPage: React.FC = () => {
     );
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+      } else {
+        // Fallback for non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setCopied(true);
+        } catch (err) {
+          console.error('Fallback: Oops, unable to copy', err);
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy!', err);
+    }
     setTimeout(() => setCopied(false), 2000);
   };
 

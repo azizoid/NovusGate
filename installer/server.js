@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
+const logService = require('./log_service'); // Import Log Service
 
 const app = express();
 app.use(cors());
@@ -11,7 +12,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Project paths
-const PROJECT_ROOT = path.join(__dirname, '..', 'server');
+const PROJECT_ROOT = '/project_root';
 const DATA_DIR = path.join(__dirname, 'data');
 const SERVERS_FILE = path.join(DATA_DIR, 'servers.json');
 
@@ -234,6 +235,18 @@ app.get('/api/servers/:id/docker', async (req, res) => {
   }
 });
 
+// Stream Docker Logs (Live) - Add this BEFORE or AFTER generic docker actions
+app.get('/api/servers/:id/docker/logs/stream', async (req, res) => {
+  const { container } = req.query;
+  const data = loadServers();
+  const server = data.servers.find(s => s.id === req.params.id);
+  
+  if (!server) return res.status(404).json({ error: 'Server not found' });
+  if (!container) return res.status(400).json({ error: 'Container name required' });
+  
+  await logService.streamContainerLogs(server, container, req, res);
+});
+
 // POST /api/servers/:id/docker/:action - Control Docker container
 app.post('/api/servers/:id/docker/:action', async (req, res) => {
   const { container } = req.body;
@@ -434,34 +447,8 @@ app.post('/api/servers/:id/uninstall', async (req, res) => {
     return res.status(404).json({ error: 'Server not found' });
   }
   
-  const UNINSTALL_SCRIPT = `
-#!/bin/bash
-echo "=========================================="
-echo "  NovusMesh UNINSTALLING"
-echo "=========================================="
-
-cd /opt/novusmesh 2>/dev/null || true
-
-# Stop containers
-if [ -f "deployments/docker/docker-compose.yml" ]; then
-  docker-compose -f deployments/docker/docker-compose.yml down -v --rmi local 2>/dev/null || true
-fi
-
-# Stop any novusmesh containers
-docker ps -a | grep novusmesh | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
-
-# Remove images
-docker images | grep novusmesh | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
-
-# Remove volumes
-docker volume ls | grep novusmesh | awk '{print $2}' | xargs -r docker volume rm -f 2>/dev/null || true
-
-# Remove files
-rm -rf /opt/novusmesh
-
-echo ""
-echo "NovusMesh completely removed!"
-`;
+// Use the shared UNINSTALL_SCRIPT
+  // const UNINSTALL_SCRIPT = ... (defined below)
 
   try {
     const conn = await createSSHConnection(server);
@@ -494,68 +481,100 @@ app.post('/api/servers/:id/install', async (req, res) => {
     return res.status(404).json({ error: 'Server not found' });
   }
   
-  let archivePath = null;
-  
-  // Create archive for local mode
-  if (source === 'local') {
-    try {
-      archivePath = await createProjectArchive();
-    } catch (err) {
-      return res.status(500).json({ error: 'Failed to create archive: ' + err.message });
-    }
-  }
-  
+  // STREAM RESPONSE IMMEDIATELY
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendLog = (text, isError = false) => {
+    res.write(`data: ${JSON.stringify({ text: text + '\n', stderr: isError })}\n\n`);
+  };
+
   try {
+    sendLog('[INFO] Initializing installation...');
+
+    // 1. Create Archive (Local only)
+    let archivePath = null;
+    if (source === 'local') {
+      sendLog('[INFO] Creating project archive...');
+      try {
+        archivePath = await createProjectArchive();
+        sendLog('[INFO] Archive created successfully.');
+      } catch (err) {
+        sendLog(`[ERROR] Failed to create archive: ${err.message}`, true);
+        res.end();
+        return;
+      }
+    }
+
+    // 2. Connect SSH
+    sendLog(`[INFO] Connecting to server ${server.host}...`);
     const conn = await createSSHConnection(server);
-    
-    // Upload archive if local mode
-    if (source === 'local' && archivePath) {
-      await uploadFile(conn, archivePath, '/tmp/novusmesh.tar.gz');
-      fs.unlinkSync(archivePath);
+    sendLog('[INFO] Connected!');
+
+    // 3. Upload Archive
+    if (archivePath) {
+      sendLog('[INFO] Uploading archive to server (this may take a moment)...');
+      try {
+        await uploadFile(conn, archivePath, '/tmp/novusmesh.tar.gz');
+        sendLog('[INFO] Upload complete.');
+      } catch (uploadErr) {
+        sendLog(`[ERROR] Upload failed: ${uploadErr.message}`, true);
+        throw uploadErr; // Rethrow to trigger outer catch
+      } finally {
+         if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath); // Cleanup local
+      }
     }
+
+    // 4. Prepare Config & Script
+    const config = {
+      adminUsername: req.body.adminUsername,
+      adminPassword: req.body.adminPassword,
+      networkName: req.body.networkName,
+      networkCidr: req.body.networkCidr,
+      vpnIp: req.body.vpnIp,
+      dbName: req.body.dbName,
+      dbUser: req.body.dbUser,
+      dbPassword: req.body.dbPassword
+    };
+
+    let script = GENERATE_INSTALL_SCRIPT(config);
+    if (migrateOnly) script = DATABASE_MIGRATE_SCRIPT;
+    else if (update) script = UPDATE_SCRIPT;
+    else if (reinstall) script = GENERATE_REINSTALL_SCRIPT(config);
+
+    const envs = `export DEBIAN_FRONTEND=noninteractive`;
+
+    // 5. Execute Script
+    sendLog('[INFO] Executing installation script...');
     
-    // Select install script
-    let script = INSTALL_SCRIPT_LOCAL;
-    if (migrateOnly) {
-      script = DATABASE_MIGRATE_SCRIPT;
-    } else if (update) {
-      script = UPDATE_SCRIPT;
-    } else if (reinstall) {
-      script = REINSTALL_SCRIPT;
-    }
-    
-    // Use streaming response
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-    
-    let output = '';
-    
-    conn.exec(script, (err, stream) => {
+    conn.exec(`${envs}\n${script}`, (err, stream) => {
       if (err) {
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        sendLog(`[ERROR] Execution failed: ${err.message}`, true);
         res.end();
         conn.end();
         return;
       }
       
+      let outputBuffer = '';
+
       stream.on('data', (chunk) => {
         const text = chunk.toString();
-        output += text;
+        outputBuffer += text;
         res.write(`data: ${JSON.stringify({ text })}\n\n`);
       });
       
       stream.stderr.on('data', (chunk) => {
         const text = chunk.toString();
-        output += text;
+        outputBuffer += text;
         res.write(`data: ${JSON.stringify({ text, stderr: true })}\n\n`);
       });
       
       stream.on('close', (code) => {
         conn.end();
         
-        // Update server
+        // Update server status
         server.status = code === 0 ? 'installed' : 'error';
         server.installedAt = new Date().toISOString();
         server.history = server.history || [];
@@ -567,24 +586,20 @@ app.post('/api/servers/:id/install', async (req, res) => {
         });
         saveServers(data);
         
+        // Post-install logic (API Key parsing)
         if (code === 0) {
-          // Parse API Key and Update local web/.env
           try {
-            const apiKeyMatch = output.match(/API_KEY:\s+([a-zA-Z0-9]+)/);
-            if (apiKeyMatch && apiKeyMatch[1]) {
-              const apiKey = apiKeyMatch[1];
-              const apiHost = server.host; // Use SSH host
-              const envContent = `API_URL=http://${apiHost}:8080\nAPI_KEY=${apiKey}\n`;
-              
-              // Try Docker mount path first, then local path
-              const dockerPath = '/web/.env';
-              const localPath = path.join(__dirname, '..', 'web', '.env');
-              const envPath = fs.existsSync('/web') ? dockerPath : localPath;
-              
-              fs.writeFileSync(envPath, envContent);
-              
-              res.write(`data: ${JSON.stringify({ text: '\n[INFO] Local web/.env file updated! 🚀\n' })}\n\n`);
-            }
+             const apiKeyMatch = outputBuffer.match(/API_KEY:\s+([a-zA-Z0-9]+)/);
+             if (apiKeyMatch && apiKeyMatch[1]) {
+                const apiKey = apiKeyMatch[1];
+                const envContent = `VITE_API_URL=http://${config.vpnIp || '10.99.0.1'}:8080\nVITE_API_KEY=${apiKey}\n`;
+                const dockerPath = '/project_root/web/.env';
+                const localPath = path.join(__dirname, '..', 'web', '.env');
+                const envPath = fs.existsSync('/project_root') ? dockerPath : localPath;
+                
+                fs.writeFileSync(envPath, envContent);
+                res.write(`data: ${JSON.stringify({ text: '\n[INFO] Local web/.env file updated! 🚀\n' })}\n\n`);
+             }
           } catch (e) {
             console.error('Error updating web/.env:', e);
             res.write(`data: ${JSON.stringify({ text: `\n[WARN] Failed to update web/.env: ${e.message}\n` })}\n\n`);
@@ -719,7 +734,7 @@ app.post('/api/servers/:id/join-vpn', async (req, res) => {
 
 // ============ INSTALL SCRIPTS ============
 
-const INSTALL_SCRIPT_LOCAL = `
+const GENERATE_INSTALL_SCRIPT = (config) => `
 #!/bin/bash
 set -e
 
@@ -728,6 +743,18 @@ RED='\\033[0;31m'
 GREEN='\\033[0;32m'
 YELLOW='\\033[1;33m'
 NC='\\033[0m'
+
+# Configuration Variables
+ADMIN_USERNAME="${config.adminUsername || 'admin'}"
+ADMIN_PASSWORD="${config.adminPassword || ''}" # Empty means auto-generate
+VPN_IP="${config.vpnIp || '10.99.0.1'}"
+VPN_SUBNET="${config.vpnIp ? config.vpnIp.replace(/\.\d+$/, '.0/24') : '10.99.0.0/24'}"
+VPN_CLIENT_IP="${config.vpnIp ? config.vpnIp.replace(/\.\d+$/, '.2') : '10.99.0.2'}"
+
+# Database Config
+DB_NAME="${config.dbName || 'novusmesh'}"
+DB_USER="${config.dbUser || 'novusmesh'}"
+DB_PASSWORD="${config.dbPassword || ''}" # Empty means auto-generate
 
 log_info() { echo -e "\${GREEN}[INFO]\${NC} $1"; }
 log_warn() { echo -e "\${YELLOW}[WARN]\${NC} $1"; }
@@ -771,42 +798,156 @@ generate_secret() {
 
 API_KEY=$(generate_secret)
 JWT_SECRET=$(generate_secret)
-TURN_SECRET=$(generate_secret)
-DB_PASSWORD=$(generate_secret)
-ADMIN_PASSWORD=$(generate_secret)
-ADMIN_USERNAME="admin"
+
+if [ -z "$DB_PASSWORD" ]; then
+  DB_PASSWORD=$(generate_secret)
+fi
+
+if [ -z "$ADMIN_PASSWORD" ]; then
+  ADMIN_PASSWORD=$(generate_secret)
+fi
 
 # Detect Server Public IP
 log_info "Detecting Server IP..."
 SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
 log_info "Server IP: $SERVER_IP"
 
+
+# ==========================================
+# ADMIN VPN SETUP (MOVED BEFORE DOCKER START)
+# ==========================================
+log_info "Configuring Admin VPN Security Layer..."
+
+# Pre-flight Cleanup (Prevent existing wg0 conflicts)
+log_info "Cleaning up previous VPN state..."
+# Pre-flight Cleanup (Prevent existing wg0 conflicts)
+log_info "Cleaning up previous VPN state..."
+
+# 1. Stop existing Docker containers holding ports
+if command -v docker &> /dev/null; then
+  docker ps -q --filter name=novusmesh | xargs -r docker stop || true
+  docker ps -q --filter name=novusmesh | xargs -r docker rm || true
+fi
+
+# 2. Stop Systemd Services
+systemctl stop wg-quick@wg0 2>/dev/null || true
+systemctl disable wg-quick@wg0 2>/dev/null || true
+
+# 3. Force remove interface if it exists (e.g. from stuck container)
+ip link delete wg0 2>/dev/null || true
+
+# 4. Clean Configs
+rm -f /etc/wireguard/wg0.conf
+rm -f /etc/wireguard/wg1.conf # Clean old wg1 if exists
+
+# Install WireGuard
+if ! command -v wg &> /dev/null; then
+  log_info "Installing WireGuard..."
+  apt-get install -y wireguard
+fi
+
+# Generate Keys
+umask 077
+WG_SERVER_PRIVATE_KEY=$(wg genkey)
+WG_SERVER_PUBLIC_KEY=$(echo "$WG_SERVER_PRIVATE_KEY" | wg pubkey)
+WG_CLIENT_PRIVATE_KEY=$(wg genkey)
+WG_CLIENT_PUBLIC_KEY=$(echo "$WG_CLIENT_PRIVATE_KEY" | wg pubkey)
+
+# Create Server Config (wg0)
+mkdir -p /etc/wireguard
+cat <<WG0 > /etc/wireguard/wg0.conf
+[Interface]
+Address = $VPN_IP/24
+ListenPort = 51820
+PrivateKey = $WG_SERVER_PRIVATE_KEY
+SaveConfig = false
+
+[Peer]
+PublicKey = $WG_CLIENT_PUBLIC_KEY
+AllowedIPs = $VPN_CLIENT_IP/32
+WG0
+
+# Enable and Start wg0
+systemctl enable wg-quick@wg0
+systemctl restart wg-quick@wg0
+
+# Generate Client Config
+cat <<CLIENT > /tmp/admin-vpn.conf
+[Interface]
+PrivateKey = $WG_CLIENT_PRIVATE_KEY
+Address = $VPN_CLIENT_IP/32
+DNS = 8.8.8.8
+
+[Peer]
+PublicKey = $WG_SERVER_PUBLIC_KEY
+Endpoint = $SERVER_IP:51820
+AllowedIPs = $VPN_SUBNET
+PersistentKeepalive = 25
+CLIENT
+
+log_info "Admin VPN configured."
+
+# Apply Firewall (MOVED BEFORE DOCKER START)
+# This includes 'systemctl restart docker' which fixes the chain issues
+log_info "Applying Firewall Rules..."
+if [ -f "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh" ]; then
+  if command -v sed &> /dev/null; then
+    sed -i 's/\r$//' "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  fi
+  chmod +x "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+elif [ -f "$INSTALL_DIR/deployments/docker/setup-firewall.sh" ]; then
+  chmod +x "$INSTALL_DIR/deployments/docker/setup-firewall.sh"
+  "$INSTALL_DIR/deployments/docker/setup-firewall.sh"
+else
+  log_warn "setup-firewall.sh not found. Skipping firewall step."
+fi
+
+
 # Create Server .env
-cat <<EOF > "$INSTALL_DIR/deployments/docker/.env"
+# Ensure directory exists
+mkdir -p "$INSTALL_DIR/server/deployments/docker"
+
+cat <<EOF > "$INSTALL_DIR/server/deployments/docker/.env"
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
-TURN_SECRET=$TURN_SECRET
+
 API_KEY=$API_KEY
 ADMIN_USERNAME=$ADMIN_USERNAME
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 WG_SERVER_ENDPOINT=$SERVER_IP
+ADMIN_CIDR=$VPN_SUBNET
 EOF
+chmod 600 "$INSTALL_DIR/server/deployments/docker/.env"
+
+# Create Web .env
+# Ensure directory exists
+mkdir -p "$INSTALL_DIR/web"
+
+
+cat <<EOF > "$INSTALL_DIR/web/.env"
+VITE_API_URL=http://$VPN_IP:8080
+VITE_API_KEY=$API_KEY
+EOF
+chmod 600 "$INSTALL_DIR/web/.env"
 
 
 # Start services
 log_info "Starting services..."
 cd "$INSTALL_DIR"
-docker-compose -f deployments/docker/docker-compose.yml up -d --build
+docker-compose -f server/deployments/docker/docker-compose.yml up -d --build
 
 # Wait
 log_info "Waiting 30 seconds..."
 sleep 30
 
 # Initialize
-log_info "Creating network..."
-# We run init to create the default network and admin user
-INIT_OUTPUT=$(docker-compose -f deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server init --name "default-network" --cidr "10.10.0.0/16" 2>&1 || true)
-echo "$INIT_OUTPUT"
+log_info "Skipping default network creation (Admin Network is auto-created)..."
+# We DO NOT run init anymore, because we only want the Admin Network initially.
+# INIT_OUTPUT=$(docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server init --name "$NETWORK_NAME" --cidr "$NETWORK_CIDR" 2>&1 || true)
+# echo "$INIT_OUTPUT"
 
 SERVER_IP=$(hostname -I | awk '{print $1}')
 
@@ -815,7 +956,22 @@ echo "=========================================="
 echo -e "\${GREEN}  INSTALLATION COMPLETE!\${NC}"
 echo "=========================================="
 echo "Server IP: $SERVER_IP"
-echo "Admin Dashboard: http://$SERVER_IP:8080"
+echo ""
+echo "------------------------------------------"
+echo "  🔒 ADMIN VPN CONFIG (REQUIRED)  "
+echo "------------------------------------------"
+echo "The Admin Dashboard is now HIDDEN behind this VPN."
+echo "You MUST connect to this VPN to access the dashboard."
+echo ""
+echo "BEGIN_VPN_CONFIG"
+cat /tmp/admin-vpn.conf
+echo "END_VPN_CONFIG"
+echo ""
+echo "Save this as 'admin-vpn.conf' and import into WireGuard."
+echo "------------------------------------------"
+echo ""
+echo "Admin Dashboard: http://$VPN_IP:3007"
+echo "API Endpoint:    http://$VPN_IP:8080"
 echo ""
 echo "------------------------------------------"
 echo "  SECURITY KEYS (SAVE THESE!)"
@@ -828,7 +984,7 @@ echo "------------------------------------------"
 echo "INTERNAL SECRETS (.env):"
 echo "DB_PASSWORD: $DB_PASSWORD"
 echo "JWT_SECRET:  $JWT_SECRET"
-echo "TURN_SECRET: $TURN_SECRET"
+
 echo "------------------------------------------"
 echo "These keys were automatically written to deployments/docker/.env"
 echo ""
@@ -836,7 +992,19 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep novusmesh 
 `;
 
 
-const REINSTALL_SCRIPT = `
+const GENERATE_REINSTALL_SCRIPT = (config) => {
+  // Config Defaults
+  const DB_NAME = config.dbName || 'novusmesh';
+  const DB_USER = config.dbUser || 'novusmesh';
+  const DB_PASS = config.dbPassword || ''; // If empty, generate or keep old?
+  const ADMIN_USER = config.adminUsername || 'admin';
+  const ADMIN_PASS = config.adminPassword || '';
+  // Removed unused NET_NAME/CIDR
+  // Calculate ADMIN_CIDR for .env
+  const VPN_IP = config.vpnIp || '10.99.0.1'; 
+  const ADMIN_CIDR = VPN_IP.replace(/\.\d+$/, '.0/24');
+
+  return `
 #!/bin/bash
 set -e
 
@@ -847,16 +1015,16 @@ echo "  NovusMesh REINSTALL"
 echo "=========================================="
 
 # Backup .env before deleting
-if [ -f "$INSTALL_DIR/deployments/docker/.env" ]; then
+if [ -f "$INSTALL_DIR/server/deployments/docker/.env" ]; then
   echo "Preserving old config..."
-  cp "$INSTALL_DIR/deployments/docker/.env" /tmp/novusmesh.env.bak
+  cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/novusmesh.env.bak
 fi
 
 # Stop and remove existing
-if [ -f "$INSTALL_DIR/deployments/docker/docker-compose.yml" ]; then
+if [ -f "$INSTALL_DIR/server/deployments/docker/docker-compose.yml" ]; then
   cd "$INSTALL_DIR"
   # NO -v flag here, keep volumes!
-  docker-compose -f deployments/docker/docker-compose.yml down --rmi local 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml down --rmi local 2>/dev/null || true
 fi
 
 # Remove files but KEEP the data directory
@@ -877,50 +1045,151 @@ cd "$INSTALL_DIR"
 # Restore or generate .env
 if [ -f "/tmp/novusmesh.env.bak" ]; then
   echo "Restoring configuration..."
-  mv /tmp/novusmesh.env.bak deployments/docker/.env
+  # Creating directory structure if missing after clean
+  mkdir -p server/deployments/docker
+  mv /tmp/novusmesh.env.bak server/deployments/docker/.env
   
-  # Add WG_SERVER_ENDPOINT if missing
-  if ! grep -q "WG_SERVER_ENDPOINT" deployments/docker/.env; then
+  # Ensure WG_SERVER_ENDPOINT exists
+  if ! grep -q "WG_SERVER_ENDPOINT" server/deployments/docker/.env; then
     SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
-    echo "WG_SERVER_ENDPOINT=$SERVER_IP" >> deployments/docker/.env
-    echo "WG_SERVER_ENDPOINT added: $SERVER_IP"
+    echo "WG_SERVER_ENDPOINT=$SERVER_IP" >> server/deployments/docker/.env
   fi
 else
-  echo "Generating new keys..."
+  echo "Generating new keys (Config provided)..."
   generate_secret() { openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | od -An -t x1 | tr -d ' \\n'; }
   
   API_KEY=$(generate_secret)
   JWT_SECRET=$(generate_secret)
-  TURN_SECRET=$(generate_secret)
-  DB_PASSWORD=$(generate_secret)
-  ADMIN_PASSWORD=$(generate_secret)
-  ADMIN_USERNAME="admin"
+  
+  # Use provided or generate
+  DB_PASSWORD="${DB_PASS}"
+  if [ -z "$DB_PASSWORD" ]; then
+     DB_PASSWORD=$(generate_secret)
+  fi
+
+  ADMIN_PASSWORD="${ADMIN_PASS}"
+  if [ -z "$ADMIN_PASSWORD" ]; then
+     ADMIN_PASSWORD=$(generate_secret)
+  fi
+  
   SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
   
-  cat <<EOF > deployments/docker/.env
+  mkdir -p server/deployments/docker
+  cat <<EOF > server/deployments/docker/.env
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
-TURN_SECRET=$TURN_SECRET
+
 API_KEY=$API_KEY
-ADMIN_USERNAME=$ADMIN_USERNAME
+ADMIN_USERNAME=${ADMIN_USER}
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 WG_SERVER_ENDPOINT=$SERVER_IP
+ADMIN_CIDR=${ADMIN_CIDR}
 EOF
+  
+  # Also regenerate web/.env if needed or ensure it has VITE_ prefix
+  # For reinstall we might rely on the main install flow to handle web .env but 
+  # strictly speaking the server.js script handles the web.env creation in the main flow.
+  # The reinstall script logic above creates 'server/deployments/docker/.env'.
+  # It does NOT appear to create 'web/.env' in the current script block. 
+  # Wait, looking at the code, install script does it at line 918. 
+  # Reinstall script currently ONLY touches server/.env.
+  # If web/.env exists it might be stale or incorrect format.
+  # Let's add web/.env regeneration to Reinstall script for safety.
+  
+  mkdir -p web
+  cat <<EOF > web/.env
+VITE_API_URL=http://${VPN_IP}:8080
+VITE_API_KEY=$API_KEY
+EOF
+  chmod 600 web/.env
+fi
+
+# Setup Firewall (re-run to ensure rules match new config if relevant, though mostly static)
+if [ -f "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh" ]; then
+  # Fix Windows CRLF line endings
+  sed -i 's/\\r$//' "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  chmod +x "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
 fi
 
 # Start
-docker-compose -f deployments/docker/docker-compose.yml up -d --build
+echo "Starting services..."
+docker-compose -f server/deployments/docker/docker-compose.yml up -d --build
 
+echo "Waiting for DB..."
+sleep 20
 
-sleep 30
-# Only init usually if db was wiped. Since we did 'down -v', db is wiped.
-docker-compose -f deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server init --name "default-network" --cidr "10.10.0.0/16" 2>&1 || true
+# Init with dynamic params
+echo "Re-Initializing NovusMesh Control Plane..."
+# Init command skipped (Admin Network auto-bootstrapped)
 
-echo "REINSTALL CONFIRMED!"
+echo "REINSTALL COMPLETE!"
 docker ps | grep novusmesh || true
 `;
+};
 
 // ============ HELPERS ============
+
+const UNINSTALL_SCRIPT = `
+#!/bin/bash
+set -e
+INSTALL_DIR="/opt/novusmesh"
+
+echo "=========================================="
+echo "  NovusMesh DEEP UNINSTALL"
+echo "  WARNING: This will delete ALL data"
+echo "=========================================="
+
+echo "[1/5] Stopping Docker services..."
+if [ -f "$INSTALL_DIR/server/deployments/docker/docker-compose.yml" ]; then
+  cd "$INSTALL_DIR"
+  docker-compose -f server/deployments/docker/docker-compose.yml down -v --rmi all --remove-orphans 2>/dev/null || true
+fi
+
+# Fallback: kill any novusmesh containers
+docker ps -q --filter name=novusmesh | xargs -r docker stop || true
+docker ps -a --format "{{.ID}} {{.Names}}" | grep novusmesh | awk '{print $1}' | xargs -r docker rm -f || true
+
+echo "[2/5] Cleaning WireGuard Interfaces..."
+# Stop Admin VPN
+systemctl stop wg-quick@wg1 2>/dev/null || true
+systemctl disable wg-quick@wg1 2>/dev/null || true
+ip link delete wg1 2>/dev/null || true
+rm -f /etc/wireguard/wg1.conf
+
+# Stop Node VPN (Admin Network now on wg0)
+systemctl stop wg-quick@wg0 2>/dev/null || true
+systemctl disable wg-quick@wg0 2>/dev/null || true
+ip link delete wg0 2>/dev/null || true
+rm -f /etc/wireguard/wg0.conf
+
+echo "[3/5] Flushing Firewall Rules..."
+# Reset iptables to default ACCEPT
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -F
+iptables -X
+iptables -t nat -F
+iptables -t nat -X
+iptables -t mangle -F
+iptables -t mangle -X
+iptables -t raw -F
+iptables -t raw -X
+
+# Save clean state
+if command -v netfilter-persistent &> /dev/null; then
+    netfilter-persistent save
+fi
+
+echo "[4/5] Removing Files..."
+rm -rf "$INSTALL_DIR"
+
+echo "[5/5] Cleanup Complete!"
+echo "Server is ready for a fresh install."
+`;
 
 const UPDATE_SCRIPT = `
 #!/bin/bash
@@ -929,65 +1198,171 @@ INSTALL_DIR="/opt/novusmesh"
 TEMP_DIR="/tmp/novusmesh_update"
 
 echo "=========================================="
-echo "  NovusMesh SMART UPDATE"
-echo "  .env and data/ PRESERVED"
+echo "  NovusMesh SMART UPDATE v2.0"
+echo "  Only changed files & containers updated"
 echo "=========================================="
 
 # 1. Extract new code to temp dir
-echo "[1/4] Extracting new files..."
+echo "[1/6] Extracting new files..."
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 tar -xzf /tmp/novusmesh.tar.gz -C "$TEMP_DIR"
 rm -f /tmp/novusmesh.tar.gz
 
-# 2. Copy only changed files with rsync (excluding env and data)
-echo "[2/4] Comparing and updating files..."
-if command -v rsync &> /dev/null; then
-  rsync -av --delete \\
+# 2. Detect what changed
+echo "[2/6] Detecting changes..."
+
+SERVER_CHANGED=false
+WEB_CHANGED=false
+DOCKER_CHANGED=false
+
+# Check server/ changes (Go code)
+if [ -d "$INSTALL_DIR/server" ]; then
+  SERVER_DIFF=$(diff -rq "$TEMP_DIR/server" "$INSTALL_DIR/server" \\
     --exclude='.env' \\
-    --exclude='deployments/docker/.env' \\
+    --exclude='data' \\
+    --exclude='*.log' \\
+    2>/dev/null | grep -v "Only in $INSTALL_DIR" || true)
+  if [ -n "$SERVER_DIFF" ]; then
+    SERVER_CHANGED=true
+    echo "  📦 Server code changed"
+  fi
+else
+  SERVER_CHANGED=true
+  echo "  📦 Server code is new"
+fi
+
+# Check web/ changes (React code)
+if [ -d "$INSTALL_DIR/web" ]; then
+  WEB_DIFF=$(diff -rq "$TEMP_DIR/web" "$INSTALL_DIR/web" \\
+    --exclude='.env' \\
+    --exclude='node_modules' \\
+    --exclude='dist' \\
+    --exclude='*.log' \\
+    2>/dev/null | grep -v "Only in $INSTALL_DIR" || true)
+  if [ -n "$WEB_DIFF" ]; then
+    WEB_CHANGED=true
+    echo "  🌐 Web code changed"
+  fi
+else
+  WEB_CHANGED=true
+  echo "  🌐 Web code is new"
+fi
+
+# Check docker-compose or Dockerfile changes
+if [ -f "$INSTALL_DIR/server/deployments/docker/docker-compose.yml" ]; then
+  if ! diff -q "$TEMP_DIR/server/deployments/docker/docker-compose.yml" "$INSTALL_DIR/server/deployments/docker/docker-compose.yml" > /dev/null 2>&1; then
+    DOCKER_CHANGED=true
+    echo "  🐳 Docker config changed"
+  fi
+  if ! diff -q "$TEMP_DIR/server/deployments/docker/Dockerfile.control-plane" "$INSTALL_DIR/server/deployments/docker/Dockerfile.control-plane" > /dev/null 2>&1; then
+    SERVER_CHANGED=true
+    echo "  🐳 Server Dockerfile changed"
+  fi
+fi
+
+if [ -f "$TEMP_DIR/web/Dockerfile" ] && [ -f "$INSTALL_DIR/web/Dockerfile" ]; then
+  if ! diff -q "$TEMP_DIR/web/Dockerfile" "$INSTALL_DIR/web/Dockerfile" > /dev/null 2>&1; then
+    WEB_CHANGED=true
+    echo "  🐳 Web Dockerfile changed"
+  fi
+fi
+
+# If nothing changed
+if [ "$SERVER_CHANGED" = false ] && [ "$WEB_CHANGED" = false ] && [ "$DOCKER_CHANGED" = false ]; then
+  echo ""
+  echo "  ✅ No changes detected! System is up to date."
+  rm -rf "$TEMP_DIR"
+  exit 0
+fi
+
+# 3. Copy files (preserving .env and data)
+echo "[3/6] Updating files..."
+if command -v rsync &> /dev/null; then
+  rsync -a --delete \\
+    --exclude='.env' \\
+    --exclude='server/deployments/docker/.env' \\
+    --exclude='web/.env' \\
     --exclude='data/' \\
     --exclude='*.log' \\
     "$TEMP_DIR/" "$INSTALL_DIR/"
 else
-  # If rsync is missing, use cp
-  echo "rsync not found, using cp..."
-  # Backup .env
-  if [ -f "$INSTALL_DIR/deployments/docker/.env" ]; then
-    cp "$INSTALL_DIR/deployments/docker/.env" /tmp/novusmesh.env.bak
-  fi
+  # Backup .env files
+  [ -f "$INSTALL_DIR/server/deployments/docker/.env" ] && cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/novusmesh.env.bak
+  [ -f "$INSTALL_DIR/web/.env" ] && cp "$INSTALL_DIR/web/.env" /tmp/novusmesh.web.env.bak
   
-  # Copy all except data
-  find "$TEMP_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec cp -r {} "$INSTALL_DIR/" \\;
+  # Copy files
+  cp -r "$TEMP_DIR"/* "$INSTALL_DIR/"
   
-  # Restore .env
-  if [ -f "/tmp/novusmesh.env.bak" ]; then
-    mv /tmp/novusmesh.env.bak "$INSTALL_DIR/deployments/docker/.env"
+  # Restore .env files
+  [ -f "/tmp/novusmesh.env.bak" ] && mv /tmp/novusmesh.env.bak "$INSTALL_DIR/server/deployments/docker/.env"
+  [ -f "/tmp/novusmesh.web.env.bak" ] && mv /tmp/novusmesh.web.env.bak "$INSTALL_DIR/web/.env"
+fi
+
+rm -rf "$TEMP_DIR"
+cd "$INSTALL_DIR"
+
+# 4. Rebuild only changed containers
+echo "[4/6] Rebuilding changed containers..."
+
+# Remove dangling images first to avoid conflicts
+docker image prune -f 2>/dev/null || true
+
+if [ "$DOCKER_CHANGED" = true ]; then
+  echo "  Docker config changed - full rebuild required"
+  docker-compose -f server/deployments/docker/docker-compose.yml down --rmi local 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml up -d --build --force-recreate
+elif [ "$SERVER_CHANGED" = true ] && [ "$WEB_CHANGED" = true ]; then
+  echo "  Rebuilding: control-plane, web"
+  docker-compose -f server/deployments/docker/docker-compose.yml stop control-plane web 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml rm -f control-plane web 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml build --no-cache control-plane web
+  docker-compose -f server/deployments/docker/docker-compose.yml up -d --force-recreate --no-deps control-plane web
+elif [ "$SERVER_CHANGED" = true ]; then
+  echo "  Rebuilding: control-plane only"
+  docker-compose -f server/deployments/docker/docker-compose.yml stop control-plane 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml rm -f control-plane 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml build --no-cache control-plane
+  docker-compose -f server/deployments/docker/docker-compose.yml up -d --force-recreate --no-deps control-plane
+elif [ "$WEB_CHANGED" = true ]; then
+  echo "  Rebuilding: web only"
+  docker-compose -f server/deployments/docker/docker-compose.yml stop web 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml rm -f web 2>/dev/null || true
+  docker-compose -f server/deployments/docker/docker-compose.yml build --no-cache web
+  docker-compose -f server/deployments/docker/docker-compose.yml up -d --force-recreate --no-deps web
+fi
+
+# 5. Run migrations if server changed
+echo "[5/6] Checking database..."
+if [ "$SERVER_CHANGED" = true ]; then
+  sleep 5
+  docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate 2>&1 || echo "Migration skipped"
+else
+  echo "  Server unchanged - skipping migration"
+fi
+
+# 6. Apply Firewall (only if setup script changed)
+echo "[6/6] Checking firewall..."
+if [ -f "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh" ]; then
+  sed -i 's/\\r$//' "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  chmod +x "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  # Only run if file was in the changed set
+  if [ "$SERVER_CHANGED" = true ] || [ "$DOCKER_CHANGED" = true ]; then
+    "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh"
+  else
+    echo "  Firewall unchanged - skipping"
   fi
 fi
 
-# 3. Clean temp
-rm -rf "$TEMP_DIR"
-
-# 4. Rebuild Docker containers
-echo "[3/4] Rebuilding Docker containers..."
-cd "$INSTALL_DIR"
-
-# Clean old containers and images to prevent errors
-docker-compose -f deployments/docker/docker-compose.yml down --rmi local 2>/dev/null || true
-
-# Start again
-docker-compose -f deployments/docker/docker-compose.yml up -d --build --remove-orphans
-
-# 5. Run migration (new columns may exist)
-echo "[4/4] Running database migrations..."
-sleep 5
-docker-compose -f deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate 2>&1 || echo "Migration skipped or not needed"
+# Ensure all containers running
+docker-compose -f server/deployments/docker/docker-compose.yml up -d
 
 echo ""
 echo "=========================================="
 echo "  UPDATE COMPLETE!"
-echo "  ✅ Files updated"  
+if [ "$SERVER_CHANGED" = true ]; then echo "  ✅ Server rebuilt"; fi
+if [ "$WEB_CHANGED" = true ]; then echo "  ✅ Web rebuilt"; fi
+if [ "$SERVER_CHANGED" = false ] && [ "$WEB_CHANGED" = false ]; then echo "  ✅ Config updated (no rebuild needed)"; fi
 echo "  ✅ .env preserved"
 echo "  ✅ Database preserved"
 echo "=========================================="
@@ -1008,7 +1383,7 @@ echo "=========================================="
 cd "$INSTALL_DIR"
 
 echo "[1/2] Checking database migrations..."
-docker-compose -f deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate
+docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate
 
 echo ""
 echo "=========================================="
@@ -1032,7 +1407,7 @@ function createProjectArchive() {
       '--exclude=installer/node_modules' // Exclude installer modules from archive
     ].join(' ');
     
-    const tarCommand = `tar -czf "${archivePath}" -C "${PROJECT_ROOT}" ${excludes} .`;
+    const tarCommand = `tar -czf "${archivePath}" -C "${PROJECT_ROOT}" ${excludes} server web`;
     
     exec(tarCommand, (error, stdout, stderr) => {
       if (error) {

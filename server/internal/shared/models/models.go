@@ -23,6 +23,8 @@ type Network struct {
 	ServerPrivateKey string    `json:"-"`                           // Hub's private key (never sent to client)
 	ServerPublicKey  string    `json:"server_public_key,omitempty"` // Hub's public key (sent to peers)
 	ServerEndpoint   string    `json:"server_endpoint,omitempty"`   // Hub's endpoint (IP:Port)
+	ListenPort       int       `json:"listen_port"`                 // UDP port (e.g., 51820)
+	InterfaceName    string    `json:"interface_name"`              // Interface name (e.g., wg0)
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }

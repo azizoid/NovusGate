@@ -6,8 +6,8 @@ services:
     image: postgres:16-alpine
     container_name: novusmesh-postgres
     environment:
-      POSTGRES_DB: novusmesh
-      POSTGRES_USER: novusmesh
+      POSTGRES_DB: ${DB_NAME:-novusmesh}
+      POSTGRES_USER: ${DB_USER:-novusmesh}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-novusmesh_secret}
     volumes:
       - ../../data/postgres:/var/lib/postgresql/data
@@ -15,7 +15,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U novusmesh"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-novusmesh}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -32,20 +32,23 @@ services:
     # VPN traffic must pass through host network, not Docker bridge
     network_mode: host
     environment:
-      DATABASE_URL: postgres://novusmesh:${DB_PASSWORD:-novusmesh_secret}@localhost:5432/novusmesh?sslmode=disable
+      DATABASE_URL: postgres://${DB_USER:-novusmesh}:${DB_PASSWORD:-novusmesh_secret}@localhost:5432/${DB_NAME:-novusmesh}?sslmode=disable
       novusmesh_LISTEN: ":8080"
       novusmesh_GRPC_LISTEN: ":8443"
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
-      TURN_SECRET: ${TURN_SECRET:-change_me_in_production}
+
       novusmesh_API_KEY: ${API_KEY:-novusmesh_secret_key}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       WG_SERVER_ENDPOINT: ${WG_SERVER_ENDPOINT:-127.0.0.1}
+      ADMIN_CIDR: ${ADMIN_CIDR:-10.99.0.0/24}
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     volumes:
-      - ../../data/wireguard:/etc/wireguard
+      # CRITICAL: Mount host's actual /etc/wireguard directory
+      # This allows container to read keys created by installer
+      - /etc/wireguard:/etc/wireguard:rw
     # Note: With host network, ports are automatically exposed on host
     # Port 8080 (HTTP API), 8443 (gRPC), 51820 (WireGuard UDP)
     depends_on:
@@ -54,17 +57,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # STUN/TURN Server (Coturn)
-  coturn:
-    image: coturn/coturn:latest
-    container_name: novusmesh-coturn
+
+
+  # Web Dashboard
+  web:
+    build:
+      context: ../../../web
+      dockerfile: Dockerfile
+    container_name: novusmesh-web
     network_mode: host
-    volumes:
-      - ./turnserver.conf:/etc/turnserver.conf:ro
-      - ../../data/coturn:/var/lib/coturn
-    command: ["-c", "/etc/turnserver.conf"]
     environment:
-      TURN_SECRET: ${TURN_SECRET:-change_me_in_production}
+      API_URL: ${API_URL:-http://localhost:8080}
+    volumes:
+      - ../../../web/.env:/app/.env
+    # Port 3007 exposed via host network mode
 
 
 

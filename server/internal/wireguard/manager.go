@@ -143,10 +143,11 @@ func (m *Manager) GetPublicKey() (string, error) {
 		}
 		
 		// Create a minimal config with the generated key
-		configContent := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = 10.10.0.1/24\nListenPort = 51820\n", privateKey)
+		// Use 51820 as fallback port if not specified, but this path is usually for recovery
+		configContent := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = 10.99.0.1/24\nListenPort = 51820\n", privateKey)
 		
 		// Ensure directory exists
-		configDir := m.ConfigPath[:len(m.ConfigPath)-len("/wg0.conf")]
+		configDir := "/etc/wireguard"
 		if err := os.MkdirAll(configDir, 0700); err != nil {
 			return "", fmt.Errorf("failed to create config directory: %w", err)
 		}
@@ -201,6 +202,7 @@ func (m *Manager) GetPublicKey() (string, error) {
 type PeerStatus struct {
 	PublicKey           string
 	Endpoint            string
+	AllowedIPs          string 
 	LatestHandshakeTime int64
 	TransferRx          int64
 	TransferTx          int64
@@ -225,8 +227,9 @@ func (m *Manager) GetPeers() (map[string]PeerStatus, error) {
 		}
 
 		status := PeerStatus{
-			PublicKey: fields[0],
-			Endpoint:  fields[2],
+			PublicKey:  fields[0],
+			Endpoint:   fields[2],
+			AllowedIPs: fields[3],
 		}
 		
 		fmt.Sscanf(fields[4], "%d", &status.LatestHandshakeTime)

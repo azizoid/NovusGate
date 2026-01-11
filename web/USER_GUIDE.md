@@ -1,62 +1,249 @@
 # NovusMesh Web Dashboard - User Guide
 
 ## Introduction
-The Web Dashboard is your visual command center for the NovusMesh VPN. It allows you to add devices, monitor connections, and manage your private network from any browser.
+
+The NovusMesh Web Dashboard is your visual command center for managing the WireGuard VPN network. It allows you to add devices, monitor connections, download configurations, and manage user access from any browser.
 
 ## Getting Started
 
-### Access
-By default, the dashboard is available at:
-- **URL:** `http://YOUR_SERVER_IP` (or domain)
-- **Login:** Use the credentials generated during installation.
+### Accessing the Dashboard
+
+After installation, the dashboard is available at:
+- **URL:** `https://YOUR_SERVER_IP:3007` (or your configured domain)
+- **Default Port:** 3007 (HTTPS)
+
+### First Login
+
+1. Open the dashboard URL in your browser
+2. Accept the self-signed certificate warning (if applicable)
+3. Enter your credentials:
+   - **Username:** `admin` (or your configured username)
+   - **Password:** Generated during installation (check installation logs)
+4. Click **Login**
+
+## Dashboard Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🔷 NovusMesh                              [Dark Mode] [👤] │
+├─────────────┬───────────────────────────────────────────────┤
+│             │                                               │
+│  📊 Dashboard│   Welcome to NovusMesh                       │
+│  🖥️ Nodes    │                                               │
+│  🌐 Networks │   ┌─────────┐ ┌─────────┐ ┌─────────┐        │
+│  ⚙️ Settings │   │ Total   │ │ Online  │ │ Offline │        │
+│             │   │   12    │ │    8    │ │    4    │        │
+│             │   └─────────┘ └─────────┘ └─────────┘        │
+│             │                                               │
+│             │   Recent Activity                             │
+│             │   ├─ Ali's Phone      Online   2 min ago     │
+│             │   ├─ Office Laptop    Online   5 min ago     │
+│             │   └─ Home Server      Offline  1 hour ago    │
+│             │                                               │
+│  [Logout]   │                                               │
+└─────────────┴───────────────────────────────────────────────┘
+```
 
 ## Features
 
 ### 📊 Dashboard
-- **Overview:** See total active, pending, and offline nodes.
-- **Quick Stats:** View the ratio of online nodes vs total nodes.
-- **Recent Activity:** A quick list of the most recently added or active nodes.
 
-### 🖥️ Nodes (Peers) Management
-This is where you manage devices connected to your VPN.
+The main overview page showing:
+- **Total Nodes:** All registered devices
+- **Online Nodes:** Currently connected devices
+- **Offline Nodes:** Disconnected devices
+- **Recent Activity:** Latest connection events
 
-#### Adding a Device (Peer)
-1. Go to the **Nodes** tab.
-2. Click the **+ Create Peer** button.
-3. **Peer Name:** Give your device a friendly name (e.g., "Ali's Laptop", "Office PC").
-4. **Expiration:** Select how long this device should have access:
-   - **Forever:** No time limit.
-   - **1h / 1d / 1w:** Temporary access (useful for guests).
-   - **Custom:** Set a specific date and time for access to expire.
-5. Click **Create & Download Config**.
-6. **QR Code / Config:** A modal will appear. 
-   - **Mobile:** Scan the QR code with the WireGuard app.
-   - **Desktop:** Download the `.conf` file and import it into WireGuard.
+### 🖥️ Nodes (Peer Management)
+
+This is where you manage all VPN-connected devices.
+
+#### Viewing Nodes
+
+The nodes table displays:
+| Column | Description |
+|--------|-------------|
+| Name | Device friendly name |
+| Status | Online (🟢), Offline (⚫), Pending (🟡), Expired (🔴) |
+| IP Address | Assigned VPN IP |
+| Last Handshake | Last successful connection time |
+| Transfer | Data sent/received (↑/↓) |
+| Expires | Access expiration date (if set) |
+| Actions | Edit, Config, Delete buttons |
+
+#### Adding a New Device (Peer)
+
+1. Click **+ Create Peer** button
+2. Fill in the form:
+   - **Peer Name:** Friendly name (e.g., "Ali's iPhone", "Office PC")
+   - **Expiration:** Choose access duration:
+     - **Forever:** No time limit
+     - **1 Hour:** Temporary access
+     - **1 Day:** Daily access
+     - **1 Week:** Weekly access
+     - **Custom:** Set specific date/time
+3. Click **Create & Download Config**
+4. A modal appears with connection options
+
+#### Connecting a Device
+
+After creating a peer, you'll see the **Server Config Modal** with multiple tabs:
+
+**Config & QR Tab:**
+- View the WireGuard configuration text
+- Copy config to clipboard
+- Download `.conf` file
+- Scan QR code with mobile app
+
+**Windows Tab:**
+1. Download WireGuard installer
+2. Install the application
+3. Click "Import tunnel(s) from file"
+4. Select the downloaded `.conf` file
+5. Click "Activate"
+
+**macOS Tab:**
+1. Download WireGuard from Mac App Store
+2. Open the application
+3. Import the configuration file
+4. Activate the tunnel
+
+**Linux Tab:**
+- **Easy Install:** Copy and run the one-line install script
+- **Manual Install:**
+  ```bash
+  sudo apt install wireguard
+  sudo nano /etc/wireguard/wg0.conf
+  # Paste config
+  sudo wg-quick up wg0
+  ```
+
+**Docker Tab:**
+```bash
+docker run -d \
+  --name=wireguard-client \
+  --cap-add=NET_ADMIN \
+  --cap-add=SYS_MODULE \
+  -v /path/to/wg0.conf:/config/wg0.conf \
+  linuxserver/wireguard
+```
 
 #### Editing a Device
-- Click the **Edit** (pencil) icon next to any node.
-- **Name:** Rename the device.
-- **Status:** Manually **Disable** or **Activate** a peer (stops access immediately).
-- **Expiration:** Extend access time or remove limits.
-- **Device Info:** Manually update OS, Architecture, or Hostname for better tracking.
+
+1. Click the **✏️ Edit** button on any node
+2. Modify settings:
+   - **Name:** Change device name
+   - **Status:** 
+     - **Active:** Device can connect
+     - **Disabled:** Immediately revoke access
+   - **Expiration:** Extend or modify time limit
+   - **Device Info:** Update OS, Architecture, Hostname
+3. Click **Save Changes**
 
 #### Deleting a Device
-- Click the **Delete** (trash bin) icon to permanently remove a peer and revoke its access.
 
-### ⚙️ Settings (User Management)
-This section is for managing access to the dashboard itself.
+1. Click the **🗑️ Delete** button
+2. Confirm the deletion
+3. Device is permanently removed and access revoked
+
+### 🌐 Networks
+
+Manage VPN network configurations:
+- View existing networks
+- Create new networks with custom subnets
+- Edit network settings
+- Delete unused networks
+
+### ⚙️ Settings
 
 #### Change Password
-- **Current Password:** Enter your current login password.
-- **New Password:** Set a new secure password for your account.
+
+1. Go to **Settings** page
+2. Enter **Current Password**
+3. Enter **New Password**
+4. Confirm new password
+5. Click **Update Password**
 
 #### User Management (Admin Only)
-- **Add User:** Create additional admin accounts for other team members.
-- **Delete User:** Remove access for specific users (Note: The main `admin` user cannot be deleted).
 
-## Security
-- **Logout:** Always use the **Log Out** button in the sidebar bottom left corner when finished.
-- **HTTPS:** In production, it is highly recommended to serve this dashboard behind a reverse proxy (like Nginx) with SSL enabled.
+**Adding a User:**
+1. Click **+ Add User**
+2. Enter username and password
+3. Select role (Admin/User)
+4. Click **Create**
+
+**Deleting a User:**
+1. Find the user in the list
+2. Click **🗑️ Delete**
+3. Confirm deletion
+
+> **Note:** The main `admin` user cannot be deleted.
+
+## Status Indicators
+
+| Status | Icon | Meaning |
+|--------|------|---------|
+| Online | 🟢 | Device is connected and active |
+| Offline | ⚫ | Device is not currently connected |
+| Pending | 🟡 | Device created but never connected |
+| Expired | 🔴 | Access time has expired |
+
+## Dark Mode
+
+Toggle dark mode using the theme button in the top navigation bar. Your preference is saved automatically.
+
+## Security Best Practices
+
+1. **Change Default Password:** Update the admin password immediately after first login
+2. **Use Strong Passwords:** Minimum 12 characters with mixed case, numbers, and symbols
+3. **Set Expiration Dates:** Use time-limited access for temporary users
+4. **Regular Audits:** Review and remove unused nodes periodically
+5. **Secure Config Files:** Keep downloaded `.conf` files secure - they grant VPN access
+6. **HTTPS Only:** Always access the dashboard via HTTPS
+7. **Logout:** Always log out when finished, especially on shared computers
+
+## Troubleshooting
+
+### Cannot Access Dashboard
+
+| Issue | Solution |
+|-------|----------|
+| Connection refused | Check if server is running, verify port 3007 is open |
+| Certificate error | Accept self-signed certificate or install proper SSL |
+| Login failed | Verify credentials, check caps lock |
+
+### Device Won't Connect
+
+| Issue | Solution |
+|-------|----------|
+| Handshake timeout | Check firewall allows UDP 51820 |
+| No internet after connecting | Verify AllowedIPs in config |
+| Config not working | Re-download config, check for typos |
+
+### Node Shows Offline
+
+| Issue | Solution |
+|-------|----------|
+| Just created | Wait for first connection |
+| Was online before | Check device's WireGuard app status |
+| Expired status | Edit node and extend expiration |
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl + K` | Quick search |
+| `Esc` | Close modal |
+
+## Mobile Access
+
+The dashboard is fully responsive and works on mobile devices:
+- Use the hamburger menu (☰) to access navigation
+- QR codes are optimized for mobile scanning
+- Touch-friendly buttons and controls
 
 ## Support
-Developed by [Ali Zeynalli](https://github.com/Ali7Zeynalli).
+
+- **Developer:** [Ali Zeynalli](https://github.com/Ali7Zeynalli)
+- **Documentation:** See DEVELOPER_GUIDE.md for technical details
+- **Issues:** Report bugs on GitHub repository

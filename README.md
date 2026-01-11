@@ -5,7 +5,7 @@
 **NovusMesh** is a modern, fully self-hosted **VPN control plane** built on top of the **WireGuard®** protocol.  
 It allows you to securely connect servers, cloud instances, and personal devices using a clean **Hub-and-Spoke architecture**, all managed from a single web dashboard.
 
-Whether you’re running production infrastructure or simply want full ownership of your private network, **NovusMesh gives you clarity, security, and control**.
+Whether you're running production infrastructure or simply want full ownership of your private network, **NovusMesh gives you clarity, security, and control**.
 
 ![NovusMesh Dashboard](web/public/novusmesh_banner.png)
 
@@ -34,11 +34,14 @@ Your network — your rules.
 
 ## 🚀 Key Features
 
+- **Multi-Network Architecture**  
+  Create multiple isolated VPN networks, each with its own WireGuard interface, subnet, and port.
+
 - **Hub-and-Spoke Architecture**  
   Centralized control where all traffic is securely routed through your server.
 
 - **Modern Web Dashboard**  
-  Manage nodes, inspect traffic, and control your network using a sleek React-based UI.
+  Manage networks, nodes, inspect traffic, and control your VPN using a sleek React-based UI.
 
 - **One-Click Installer**  
   Deploy and update NovusMesh effortlessly using a dedicated Docker-based installer.
@@ -49,6 +52,8 @@ Your network — your rules.
 - **Secure by Default**  
   WireGuard cryptography, JWT authentication, and API key–based internal communication.
 
+- **Multi-Platform Client Support**  
+  QR codes for mobile, config downloads for desktop, one-line install scripts for Linux.
 
 ---
 
@@ -66,9 +71,10 @@ If you value **self-hosting, security, and simplicity**, NovusMesh is for you.
 ## 🧠 How It Works (High-Level)
 
 1. A **central server** acts as the control plane  
-2. Devices register and authenticate securely  
-3. WireGuard tunnels are established automatically  
-4. Traffic is routed securely through the control plane  
+2. Create **isolated networks** with unique subnets (10.x.x.0/24)
+3. Devices register and authenticate securely  
+4. WireGuard tunnels are established automatically  
+5. Traffic is routed securely through the control plane  
 
 No hidden magic.  
 No vendor lock-in.  
@@ -80,11 +86,34 @@ Just clean networking.
 
 NovusMesh is designed as a **modular system**, separating control, interface, and deployment for maximum flexibility and maintainability.
 
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     NovusMesh Server                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  Network 1  │  │  Network 2  │  │  Network N  │         │
+│  │   wg0:51820 │  │   wg1:51821 │  │   wgN:518XX │         │
+│  │ 10.10.0.0/24│  │ 10.20.0.0/24│  │ 10.XX.0.0/24│         │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
+│         │                │                │                 │
+│  ┌──────┴────────────────┴────────────────┴──────┐         │
+│  │              REST API (Go Backend)            │         │
+│  │                   SQLite DB                   │         │
+│  └───────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+         ┌────┴────┐  ┌────┴────┐  ┌────┴────┐
+         │ Client  │  │ Client  │  │ Client  │
+         │ (Phone) │  │ (Laptop)│  │ (Server)│
+         └─────────┘  └─────────┘  └─────────┘
+```
+
 ### 1. Server (Backend)
 📁 `./server`
 
 The core logic written in **Go**.  
-Manages the WireGuard interface, database (SQLite), and exposes the REST API.
+Manages WireGuard interfaces, SQLite database, and exposes the REST API.
 
 - **Developer Guide:** `./server/DEVELOPER_GUIDE.md`  
 - **User Guide:** `./server/USER_GUIDE.md`
@@ -136,16 +165,10 @@ docker-compose up -d --build
 1. Open `http://localhost:3017`
 2. Enter your remote server credentials
 3. Click **Install NovusMesh Server**
-4. After installation, start the Web Dashboard:
+4. After installation, connect to Admin VPN and access the Web Dashboard
 
-```bash
-cd ../web
-docker-compose up -d --build
-```
-
-5. Open `http://localhost:3007`
-
-**Login:** `admin`
+**Dashboard URL:** `https://10.99.0.1:3007` (via VPN)  
+**Login:** `admin`  
 **Password:** Shown during installation
 
 ---
@@ -157,13 +180,34 @@ For advanced users, refer to the
 
 ---
 
+## 🌐 Network Management
+
+NovusMesh supports **multiple isolated networks**:
+
+| Feature | Description |
+|---------|-------------|
+| **Isolated Subnets** | Each network has its own CIDR (e.g., 10.10.0.0/24, 10.20.0.0/24) |
+| **Dedicated Interfaces** | Automatic WireGuard interface allocation (wg0, wg1, wg2...) |
+| **Unique Ports** | Each network listens on a different UDP port (51820, 51821...) |
+| **Independent Nodes** | Nodes belong to specific networks and are isolated from others |
+
+### Creating a Network
+
+1. Go to **Networks** page in the dashboard
+2. Click **Create Network**
+3. Enter a name and CIDR range (e.g., `10.50.0.0/24`)
+4. The system automatically assigns interface and port
+
+---
+
 ## 🛡️ Security Notes
 
 * Installer generates **unique credentials** — save them immediately
-* Ensure UDP port **51820** is open
+* Ensure UDP ports **51820+** are open (one per network)
+* Admin dashboard is **hidden behind VPN** by default
 * For production use, run the Web Dashboard behind **Nginx or Caddy with SSL**
 
-Security is not optional — it’s the default.
+Security is not optional — it's the default.
 
 ---
 

@@ -1,38 +1,32 @@
-# Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 RUN npm install
 
-# Copy source
 COPY . .
 
-# Build args
-ARG VITE_API_URL
-ARG VITE_API_KEY
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_API_KEY=$VITE_API_KEY
-
-# Build
 RUN npm run build
 
-# Production stage
-# Production stage
-FROM node:20-alpine
+FROM nginx:alpine
 
-WORKDIR /app
+# Install openssl for certificate generation
+RUN apk add --no-cache openssl
 
-# Install serve
-RUN npm install -g serve
+# Copy built files
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy built assets from builder
-COPY --from=builder /app/dist ./dist
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port
+# Generate self-signed certificate at build time
+RUN mkdir -p /etc/nginx/ssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/key.pem \
+    -out /etc/nginx/ssl/cert.pem \
+    -subj "/C=AZ/ST=Baku/L=Baku/O=NovusMesh/CN=novusmesh.local"
+
 EXPOSE 3007
 
-# Start server
-CMD ["serve", "-s", "dist", "-l", "3007"]
+CMD ["nginx", "-g", "daemon off;"]

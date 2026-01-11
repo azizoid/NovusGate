@@ -39,20 +39,35 @@ func (s *Server) handleDownloadConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if network.ServerPublicKey == "" {
+	serverPublicKey := network.ServerPublicKey
+	if serverPublicKey == "" {
+		// Fallback: Try to get from running manager
+		mgr := s.getManager(network.ID)
+		if mgr != nil {
+			if key, err := mgr.GetPublicKey(); err == nil && key != "" {
+				serverPublicKey = key
+			}
+		}
+	}
+
+	if serverPublicKey == "" {
 		errorResponse(w, http.StatusInternalServerError, "server public key not configured for this network")
 		return
 	}
 
 	serverEndpoint := network.ServerEndpoint
 	if serverEndpoint == "" {
-		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), wireguard.DefaultServerPort)
+		port := network.ListenPort
+		if port == 0 {
+			port = wireguard.DefaultServerPort
+		}
+		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), port)
 	}
 	
 	cfgGen := wireguard.NewConfigGenerator()
 	config := cfgGen.GeneratePeerConfig(
 		privateKey,
-		network.ServerPublicKey,
+		serverPublicKey,
 		serverEndpoint,
 		node.VirtualIP.String(),
 		network.CIDR,
@@ -89,20 +104,35 @@ func (s *Server) handleGetQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if network.ServerPublicKey == "" {
+	serverPublicKey := network.ServerPublicKey
+	if serverPublicKey == "" {
+		// Fallback: Try to get from running manager
+		mgr := s.getManager(network.ID)
+		if mgr != nil {
+			if key, err := mgr.GetPublicKey(); err == nil && key != "" {
+				serverPublicKey = key
+			}
+		}
+	}
+
+	if serverPublicKey == "" {
 		errorResponse(w, http.StatusInternalServerError, "server public key not configured")
 		return
 	}
 
 	serverEndpoint := network.ServerEndpoint
 	if serverEndpoint == "" {
-		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), wireguard.DefaultServerPort)
+		port := network.ListenPort
+		if port == 0 {
+			port = wireguard.DefaultServerPort
+		}
+		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), port)
 	}
 
 	cfgGen := wireguard.NewConfigGenerator()
 	config := cfgGen.GeneratePeerConfig(
 		privateKey,
-		network.ServerPublicKey,
+		serverPublicKey,
 		serverEndpoint,
 		node.VirtualIP.String(),
 		network.CIDR,
@@ -168,11 +198,18 @@ func (s *Server) handleCreateServerWithConfig(w http.ResponseWriter, r *http.Req
 	}
 
 	// 3. Add to WireGuard interface
-	if s.wgManager != nil {
-		if err := s.wgManager.AddPeer(publicKey, node.VirtualIP.String()+"/32"); err != nil {
+	mgr := s.getManager(networkID)
+	if mgr != nil {
+		allowedIPs := node.VirtualIP.String() + "/32"
+		fmt.Printf("[WG] Adding peer to interface: PublicKey=%s, AllowedIPs=%s\n", publicKey, allowedIPs)
+		if err := mgr.AddPeer(publicKey, allowedIPs); err != nil {
 			// Log error but continue (soft failure)
-			fmt.Printf("Error adding peer to interface: %v\n", err)
+			fmt.Printf("[WG] ERROR adding peer to interface: %v\n", err)
+		} else {
+			fmt.Printf("[WG] SUCCESS: Peer added to WireGuard interface\n")
 		}
+	} else {
+		fmt.Printf("[WG] WARNING: No manager found for network %s - peer NOT added to WireGuard!\n", networkID)
 	}
 
 	// 4. Generate Config - Use server's public key from network
@@ -188,7 +225,11 @@ func (s *Server) handleCreateServerWithConfig(w http.ResponseWriter, r *http.Req
 		serverEndpoint = network.ServerEndpoint
 	} else {
 		serverPublicKey = "SERVER_KEY_NOT_CONFIGURED"
-		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), wireguard.DefaultServerPort)
+		port := network.ListenPort
+		if port == 0 {
+			port = wireguard.DefaultServerPort
+		}
+		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), port)
 	}
 
 	cfgGen := wireguard.NewConfigGenerator()
@@ -222,13 +263,32 @@ func (s *Server) handleNodeInstallScript(w http.ResponseWriter, r *http.Request)
 	
 	serverEndpoint := network.ServerEndpoint
 	if serverEndpoint == "" {
-		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), wireguard.DefaultServerPort)
+		port := network.ListenPort
+		if port == 0 {
+			port = wireguard.DefaultServerPort
+		}
+		serverEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), port)
+	}
+
+	serverPublicKey := network.ServerPublicKey
+	if serverPublicKey == "" {
+		// Fallback: Try to get from running manager
+		mgr := s.getManager(network.ID)
+		if mgr != nil {
+			if key, err := mgr.GetPublicKey(); err == nil && key != "" {
+				serverPublicKey = key
+			}
+		}
+		// If still empty, use placeholder to avoid crash, script will fail to connect but at least run
+		if serverPublicKey == "" {
+			serverPublicKey = "SERVER_KEY_NOT_FOUND" 
+		}
 	}
 
 	cfgGen := wireguard.NewConfigGenerator()
 	config := cfgGen.GeneratePeerConfig(
 		privateKey,
-		network.ServerPublicKey,
+		serverPublicKey,
 		serverEndpoint,
 		node.VirtualIP.String(),
 		network.CIDR,

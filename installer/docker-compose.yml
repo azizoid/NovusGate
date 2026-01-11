@@ -7,10 +7,8 @@ services:
     ports:
       - "${PORT:-3017}:${PORT:-3017}"
     volumes:
-      # Mount the server source code so it can be archived
-      - ../server:/server
-      # Mount web folder so installer can update .env
-      - ../web:/web
+      # Mount the entire project root so we can archive everything (server, web, docs, etc.)
+      - ../:/project_root
       # Persist installer data (saved servers history)
       - ./data:/app/data
     restart: unless-stopped

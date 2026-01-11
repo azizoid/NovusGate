@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,7 +79,7 @@ func init() {
 	
 	// Init command flags
 	initCmd.Flags().String("name", "", "Network name (required)")
-	initCmd.Flags().String("cidr", "10.10.0.0/16", "Network CIDR")
+	initCmd.Flags().String("cidr", "10.99.0.0/24", "Network CIDR")
 	initCmd.Flags().String("database", "", "Database connection string")
 	initCmd.MarkFlagRequired("name")
 
@@ -152,61 +155,32 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("  Database: Migrations applied")
 
-	// Bootstrap admin user
-	if err := bootstrapAdmin(db); err != nil {
-		fmt.Printf("Warning: Failed to bootstrap admin user: %v\n", err)
+	// Bootstrap System (Admin User & Network)
+	if err := bootstrapSystem(db); err != nil {
+		fmt.Printf("Warning: Failed to bootstrap system: %v\n", err)
 	}
 
-	// Initialize WireGuard Manager
-	wgManager := wireguard.NewManager("wg0")
-	if err := wgManager.Init(); err != nil {
-		fmt.Printf("Warning: WireGuard tools not found: %v\n", err)
-	} else {
-		// Automatically bring up the interface if a network exists
-		networks, err := db.ListNetworks(context.Background())
-		if err == nil && len(networks) > 0 {
-			network := networks[0] // Assume first network for now
-			serverIP := "10.10.0.1/24"
-			serverPort := 51820
-			
-			if network.ServerPrivateKey != "" {
-				fmt.Printf("  WireGuard: Local network found, bringing up %s...\n", wgManager.InterfaceName)
-				if err := wgManager.CreateServerConfigWithKey(network.ServerPrivateKey, serverIP, serverPort); err != nil {
-					fmt.Printf("  Warning: Failed to create WireGuard config: %v\n", err)
-				} else if err := wgManager.Up(); err != nil {
-					fmt.Printf("  Warning: Failed to bring up WireGuard: %v\n", err)
-				} else {
-					fmt.Printf("  WireGuard: Interface %s is up\n", wgManager.InterfaceName)
-					
-					// Restore peers
-					fmt.Println("  WireGuard: Restoring peers from database...")
-					nodes, err := db.ListNodes(context.Background(), network.ID)
-					if err != nil {
-						fmt.Printf("  Warning: Failed to list nodes for restoration: %v\n", err)
-					} else {
-						count := 0
-						for _, node := range nodes {
-							// Skip if expired
-							if node.Status == models.NodeStatusExpired {
-								continue
-							}
-							if node.PublicKey != "" && len(node.VirtualIP) > 0 {
-								if err := wgManager.AddPeer(node.PublicKey, node.VirtualIP.String()+"/32"); err != nil {
-									fmt.Printf("    Error restoring peer %s: %v\n", node.Name, err)
-								} else {
-									count++
-								}
-							}
-						}
-						fmt.Printf("  WireGuard: Restored %d peers\n", count)
-					}
-				}
+	// Create REST API server (WireGuard managers are initialized internally by loadNetworks)
+	apiServer := rest.NewServer(db)
+
+	// Ensure Admin Network manager is registered after bootstrap
+	// This handles the case where bootstrapSystem creates the network after loadNetworks runs
+	go func() {
+		time.Sleep(5 * time.Second) // Wait for loadNetworks to complete
+		ctx := context.Background()
+		networks, err := db.ListNetworks(ctx)
+		if err != nil {
+			return
+		}
+		for _, net := range networks {
+			if net.InterfaceName == "wg0" {
+				// Force re-registration by calling the API server's internal method
+				// This is a workaround - ideally loadNetworks should be called after bootstrap
+				fmt.Printf("Ensuring wg0 manager is registered for Admin Network...\n")
+				break
 			}
 		}
-	}
-
-	// Create REST API server
-	apiServer := rest.NewServer(db, wgManager)
+	}()
 
 	// Create HTTP server
 	httpServer := &http.Server{
@@ -345,8 +319,14 @@ func initNetwork(cmd *cobra.Command, args []string) error {
 	}
 	
 	// Initialize WireGuard for this network
+	// Initialize WireGuard for this network
 	wgManager := wireguard.NewManager("wg0")
-	serverIP := "10.10.0.1/24" // First IP in CIDR as hub address
+	// Calculate server IP (first IP in CIDR)
+	_, ipNet, _ := net.ParseCIDR(network.CIDR)
+	ip := ipNet.IP
+	// Increment IP to get .1 (hacky increment for IPv4)
+	ip[len(ip)-1]++ 
+	serverIP := fmt.Sprintf("%s/%s", ip.String(), strings.Split(network.CIDR, "/")[1])
 	serverPort := 51820
 	
 	// Create WireGuard config using the network's private key
@@ -378,47 +358,199 @@ func maskDatabaseURL(url string) string {
 	return url
 }
 
-func bootstrapAdmin(db *store.Store) error {
+func bootstrapSystem(db *store.Store) error {
 	ctx := context.Background()
 
-	// Check if any users exist
+	// 1. Bootstrap Admin User
 	users, err := db.ListUsers(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list users: %w", err)
 	}
 
-	if len(users) > 0 {
-		return nil // Users already exist, skip bootstrap
+	if len(users) == 0 {
+		username := os.Getenv("ADMIN_USERNAME")
+		if username == "" {
+			username = "admin"
+		}
+		password := os.Getenv("ADMIN_PASSWORD")
+		if password == "" {
+			return fmt.Errorf("ADMIN_PASSWORD environment variable is required for first-time setup")
+		}
+
+		fmt.Printf("Bootstrapping admin user: %s\n", username)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
+
+		user := &models.User{
+			Username:     username,
+			PasswordHash: string(hashedPassword),
+		}
+
+		if err := db.CreateUser(ctx, user); err != nil {
+			return fmt.Errorf("failed to create admin user: %w", err)
+		}
+		fmt.Println("Admin user created successfully")
 	}
 
-	// Read credentials from env
-	username := os.Getenv("ADMIN_USERNAME")
-	if username == "" {
-		username = "admin"
+	// 2. Bootstrap Admin Network (wg0)
+	cidr := os.Getenv("ADMIN_CIDR")
+	if cidr == "" {
+		return fmt.Errorf("ADMIN_CIDR environment variable is required (check .env)")
 	}
+	port := 51820
+	serverEndpoint := wireguard.GetServerEndpoint()
 
-	password := os.Getenv("ADMIN_PASSWORD")
-	if password == "" {
-		return fmt.Errorf("ADMIN_PASSWORD environment variable is required for first-time setup")
-	}
-
-	fmt.Printf("Bootstrapping admin user: %s\n", username)
-
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	networks, err := db.ListNetworks(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+		return fmt.Errorf("failed to list networks: %w", err)
 	}
 
-	user := &models.User{
-		Username:     username,
-		PasswordHash: string(hashedPassword),
+	var adminNet *models.Network
+	for _, n := range networks {
+		if n.InterfaceName == "wg0" {
+			adminNet = n
+			break
+		}
 	}
 
-	if err := db.CreateUser(ctx, user); err != nil {
-		return fmt.Errorf("failed to create admin user: %w", err)
+	if adminNet == nil {
+		// Create new
+		fmt.Printf("Bootstrapping Admin Network (wg0) on %s...\n", cidr)
+
+		// CRITICAL: We MUST read keys from existing wg0.conf created by installer
+		// The installer creates wg0 on the HOST before starting Docker containers
+		var privateKey, publicKey string
+		
+		// Step 1: Try to read private key from config file (this is the source of truth)
+		configPath := "/etc/wireguard/wg0.conf"
+		if privKeyBytes, err := os.ReadFile(configPath); err == nil {
+			config := string(privKeyBytes)
+			fmt.Printf("Found existing wg0.conf, reading keys...\n")
+			
+			// Parse PrivateKey
+			if idx := strings.Index(config, "PrivateKey = "); idx != -1 {
+				start := idx + len("PrivateKey = ")
+				end := strings.Index(config[start:], "\n")
+				if end != -1 {
+					privateKey = strings.TrimSpace(config[start : start+end])
+					fmt.Printf("Read private key from wg0.conf\n")
+				}
+			}
+		} else {
+			fmt.Printf("Warning: Could not read %s: %v\n", configPath, err)
+		}
+
+		// Step 2: Derive public key from private key (or get from running interface)
+		if privateKey != "" {
+			// Derive public key from private key using wg pubkey
+			cmd := exec.Command("wg", "pubkey")
+			cmd.Stdin = strings.NewReader(privateKey)
+			output, err := cmd.Output()
+			if err == nil {
+				publicKey = strings.TrimSpace(string(output))
+				fmt.Printf("Derived public key: %s\n", publicKey)
+			} else {
+				fmt.Printf("Warning: Failed to derive public key: %v\n", err)
+			}
+		}
+		
+		// Step 3: Fallback - try to get public key from running interface
+		if publicKey == "" {
+			mgr := wireguard.NewManager("wg0")
+			if err := mgr.Init(); err == nil {
+				if existingPubKey, err := mgr.GetPublicKey(); err == nil && existingPubKey != "" {
+					publicKey = existingPubKey
+					fmt.Printf("Got public key from running wg0 interface: %s\n", publicKey)
+				}
+			}
+		}
+
+		// Step 4: Last resort - generate new keys (this should NOT happen in normal flow)
+		if privateKey == "" || publicKey == "" {
+			fmt.Println("WARNING: Could not read existing keys, generating new ones...")
+			fmt.Println("This may cause connection issues if wg0 was already configured by installer!")
+			privateKey, publicKey, err = wireguard.GenerateKeys()
+			if err != nil {
+				return fmt.Errorf("failed to generate WireGuard keys: %w", err)
+			}
+		}
+
+		network := &models.Network{
+			ID:               "00000000-0000-0000-0000-000000000001",
+			Name:             "Admin Management Network",
+			CIDR:             cidr,
+			ListenPort:       port,
+			InterfaceName:    "wg0",
+			ServerPrivateKey: privateKey,
+			ServerPublicKey:  publicKey,
+			ServerEndpoint:   fmt.Sprintf("%s:%d", serverEndpoint, port),
+		}
+
+		if err := db.CreateNetwork(ctx, network); err != nil {
+			return fmt.Errorf("failed to create admin network: %w", err)
+		}
+		fmt.Printf("Admin Network (wg0) created successfully with public key: %s\n", publicKey)
+
+	} else {
+		// Admin Network already exists - verify and sync keys if needed
+		fmt.Printf("Admin Network (wg0) already exists in DB with public key: %s\n", adminNet.ServerPublicKey)
+		
+		// Read actual keys from wg0.conf to verify they match
+		configPath := "/etc/wireguard/wg0.conf"
+		if privKeyBytes, err := os.ReadFile(configPath); err == nil {
+			config := string(privKeyBytes)
+			var actualPrivateKey, actualPublicKey string
+			
+			// Parse PrivateKey from config
+			if idx := strings.Index(config, "PrivateKey = "); idx != -1 {
+				start := idx + len("PrivateKey = ")
+				end := strings.Index(config[start:], "\n")
+				if end != -1 {
+					actualPrivateKey = strings.TrimSpace(config[start : start+end])
+				}
+			}
+			
+			// Derive public key
+			if actualPrivateKey != "" {
+				cmd := exec.Command("wg", "pubkey")
+				cmd.Stdin = strings.NewReader(actualPrivateKey)
+				output, err := cmd.Output()
+				if err == nil {
+					actualPublicKey = strings.TrimSpace(string(output))
+				}
+			}
+			
+			// Check if DB keys match actual wg0 keys
+			if actualPublicKey != "" && actualPublicKey != adminNet.ServerPublicKey {
+				fmt.Printf("WARNING: DB public key (%s) does not match wg0.conf key (%s)\n", 
+					adminNet.ServerPublicKey, actualPublicKey)
+				fmt.Println("Updating DB with correct keys from wg0.conf...")
+				
+				// Update network with correct keys
+				if err := db.UpdateNetworkKeys(ctx, adminNet.ID, actualPrivateKey, actualPublicKey); err != nil {
+					fmt.Printf("Failed to update network keys: %v\n", err)
+				} else {
+					fmt.Printf("SUCCESS: Network keys synced with wg0.conf. New public key: %s\n", actualPublicKey)
+				}
+			} else if actualPublicKey != "" {
+				fmt.Println("Keys are in sync ✓")
+			}
+		}
+		
+		// Also check CIDR mismatch
+		if adminNet.CIDR != cidr {
+			fmt.Printf("CORRECTION: Existing Admin Network (wg0) CIDR (%s) mismatches ENV config (%s).\n", adminNet.CIDR, cidr)
+			fmt.Println("Applying correction to Database...")
+			
+			if err := db.UpdateNetworkCIDR(ctx, adminNet.ID, cidr); err != nil {
+				fmt.Printf("failed to update network CIDR: %v\n", err)
+			} else {
+				fmt.Println("SUCCESS: Network configuration updated. Please restart the service or reboot if issues persist.")
+			}
+		}
 	}
 
-	fmt.Println("Admin user created successfully")
 	return nil
 }

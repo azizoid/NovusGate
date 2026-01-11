@@ -57,9 +57,13 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
       const text = await api.getNodeConfig(nodeId);
       setConfig(text);
 
-      // Fetch QR Code
+      // Fetch QR Code as base64 data URL (avoids blob URL security warning)
       const blob = await api.getNodeQrCode(nodeId);
-      setQrCodeUrl(URL.createObjectURL(blob));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQrCodeUrl(reader.result as string);
+      };
+      reader.readAsDataURL(blob);
 
     } catch (err: any) {
       setError(err.message || 'Error loading configuration');
@@ -70,17 +74,41 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
 
   const handleDownload = () => {
     const element = document.createElement('a');
-    const file = new Blob([config], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
+    // Use data URL instead of blob URL to avoid security warning
+    const base64 = btoa(unescape(encodeURIComponent(config)));
+    element.href = `data:text/plain;base64,${base64}`;
     element.download = `${nodeName.replace(/\s+/g, '-').toLowerCase()}.conf`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+      } else {
+        // Fallback for non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setCopied(true);
+        } catch (err) {
+          console.error('Fallback: Oops, unable to copy', err);
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy!', err);
+    }
     setTimeout(() => setCopied(false), 2000);
   };
 

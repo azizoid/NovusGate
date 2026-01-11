@@ -1,11 +1,13 @@
 package rest
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -51,21 +53,178 @@ type PeerActivity struct {
 type Server struct {
 	store        *store.Store
 	router       *mux.Router
-	wgManager    *wireguard.Manager
+	managers   map[string]*wireguard.Manager
+	managersMu sync.RWMutex
 	peerActivity map[string]*PeerActivity
 	activityMu   sync.RWMutex
 }
 
 // NewServer creates a new REST API server
-func NewServer(store *store.Store, wgManager *wireguard.Manager) *Server {
+func NewServer(store *store.Store) *Server {
 	s := &Server{
 		store:        store,
 		router:       mux.NewRouter(),
-		wgManager:    wgManager,
+		managers:     make(map[string]*wireguard.Manager),
 		peerActivity: make(map[string]*PeerActivity),
 	}
 	s.setupRoutes()
+	// Initialize existing networks from DB
+	go s.loadNetworks()
 	return s
+}
+
+// loadNetworks initializes managers for existing networks and imports/syncs peers
+func (s *Server) loadNetworks() {
+	// Give DB a moment to come up
+	time.Sleep(2 * time.Second)
+	
+	ctx := context.Background()
+	networks, err := s.store.ListNetworks(ctx)
+	if err != nil {
+		fmt.Printf("Error loading networks: %v\n", err)
+		return
+	}
+	
+	for _, network := range networks {
+		if network.InterfaceName == "" {
+			continue
+		}
+		// Initialize manager
+		mgr := wireguard.NewManager(network.InterfaceName)
+		if err := mgr.Init(); err != nil {
+			fmt.Printf("Warning: WireGuard tools missing for %s\n", network.Name)
+			continue
+		}
+		
+		// If port is 0 (legacy), default to 51820
+		port := network.ListenPort
+		if port == 0 {
+			port = 51820
+		}
+		
+		// Ensure config exists/is valid (idempotent)
+		s.managersMu.Lock()
+		s.managers[network.ID] = mgr
+		s.managersMu.Unlock()
+		
+		// Ensure interface is UP
+		if err := mgr.Up(); err != nil {
+			fmt.Printf("Note: Interface %s might already be up: %v\n", network.InterfaceName, err)
+		} else {
+			fmt.Printf("Network %s (%s) is UP on port %d\n", network.Name, network.InterfaceName, port)
+		}
+
+		// SYNC: Import existing peers from WireGuard into DB
+		peers, err := mgr.GetPeers()
+		if err == nil && len(peers) > 0 {
+			fmt.Printf("Syncing %d peers from %s to database...\n", len(peers), network.InterfaceName)
+			
+			// Get existing DB nodes to avoid duplicates
+			dbNodes, err := s.store.ListNodes(ctx, network.ID)
+			if err != nil {
+				fmt.Printf("Failed to list DB nodes: %v\n", err)
+				continue
+			}
+			
+			existingKeys := make(map[string]bool)
+			for _, n := range dbNodes {
+				existingKeys[n.PublicKey] = true
+			}
+			
+			for pubKey, peer := range peers {
+				if !existingKeys[pubKey] {
+					// Import this peer
+					fmt.Printf("Importing peer %s...\n", pubKey)
+					
+					// Parse IP from AllowedIPs (first one if comma separated)
+					ips := strings.Split(peer.AllowedIPs, ",")
+					if len(ips) == 0 {
+						fmt.Printf("Warning: No AllowedIPs for peer %s, skipping import\n", pubKey)
+						continue
+					}
+					
+					// Take first IP and remove CIDR suffix if present
+					ipStr := strings.TrimSpace(ips[0])
+					if idx := strings.Index(ipStr, "/"); idx != -1 {
+						ipStr = ipStr[:idx]
+					}
+					
+					virtualIP := net.ParseIP(ipStr)
+					if virtualIP == nil {
+						fmt.Printf("Warning: Invalid IP %s for peer %s, skipping import\n", ipStr, pubKey)
+						continue
+					}
+
+					// Create Node
+					hostname := "imported-client"
+					// Try to give a better name for admin network
+					if network.InterfaceName == "wg1" {
+						hostname = "Admin Client"
+					} else {
+						hostname = fmt.Sprintf("Imported Node (%s)", ipStr)
+					}
+
+					node := &models.Node{
+						NetworkID: network.ID,
+						Name:      hostname,
+						PublicKey: pubKey,
+						VirtualIP: virtualIP,
+						Status:    models.NodeStatusOnline, // Assume online if present in WG
+						NodeInfo: &models.NodeInfo{
+							Hostname:     hostname,
+							OS:           "unknown",
+							Architecture: "unknown",
+						},
+					}
+					
+					if err := s.store.CreateNode(ctx, node); err != nil {
+						fmt.Printf("Failed to import node %s: %v\n", pubKey, err)
+					} else {
+						fmt.Printf("Successfully imported node %s (%s)\n", hostname, ipStr)
+						existingKeys[pubKey] = true // Mark as done
+					}
+				}
+			}
+		}
+	}
+}
+
+// getManager returns the WireGuard manager for a network
+// If manager doesn't exist but network does, it creates and registers one
+func (s *Server) getManager(networkID string) *wireguard.Manager {
+	s.managersMu.RLock()
+	mgr := s.managers[networkID]
+	s.managersMu.RUnlock()
+	
+	if mgr != nil {
+		return mgr
+	}
+	
+	// Manager not found - try to create it from network config
+	ctx := context.Background()
+	network, err := s.store.GetNetwork(ctx, networkID)
+	if err != nil || network == nil || network.InterfaceName == "" {
+		return nil
+	}
+	
+	// Create and register manager
+	newMgr := wireguard.NewManager(network.InterfaceName)
+	if err := newMgr.Init(); err != nil {
+		fmt.Printf("Warning: Failed to init WireGuard manager for %s: %v\n", network.Name, err)
+		return nil
+	}
+	
+	s.managersMu.Lock()
+	// Double-check another goroutine didn't create it
+	if existing := s.managers[networkID]; existing != nil {
+		s.managersMu.Unlock()
+		return existing
+	}
+	s.managers[networkID] = newMgr
+	s.managersMu.Unlock()
+	
+	fmt.Printf("Lazily initialized WireGuard manager for network %s (%s)\n", network.Name, network.InterfaceName)
+	return newMgr
 }
 
 // Router returns the HTTP router
@@ -102,6 +261,12 @@ func (s *Server) setupRoutes() {
 
 	// Health check
 	s.router.HandleFunc("/health", s.handleHealth).Methods("GET")
+	
+	// Debug endpoint - shows WireGuard interface status
+	api.HandleFunc("/debug/wireguard/{networkId}", s.handleDebugWireGuard).Methods("GET")
+	
+	// Sync endpoint - syncs DB peers to WireGuard interface
+	api.HandleFunc("/networks/{networkId}/sync", s.handleSyncPeers).Methods("POST")
 	
 	// Auth
 	s.router.HandleFunc("/api/v1/auth/login", s.handleLogin).Methods("POST", "OPTIONS")
@@ -311,6 +476,11 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// networksOverlap checks if two IP networks overlap
+func networksOverlap(a, b *net.IPNet) bool {
+	return a.Contains(b.IP) || b.Contains(a.IP)
+}
+
 // Network handlers
 func (s *Server) handleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks, err := s.store.ListNetworks(r.Context())
@@ -327,21 +497,115 @@ func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		errorResponse(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+
+	// Validate CIDR format
+	_, newNet, err := net.ParseCIDR(network.CIDR)
+	if err != nil {
+		errorResponse(w, http.StatusBadRequest, "invalid CIDR format: "+err.Error())
+		return
+	}
+
+	// Dynamic Allocation Logic
+	existing, err := s.store.ListNetworks(r.Context())
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to list networks")
+		return
+	}
+
+	// Check for CIDR overlap with existing networks
+	for _, existingNet := range existing {
+		_, existingCIDR, err := net.ParseCIDR(existingNet.CIDR)
+		if err != nil {
+			continue // Skip invalid existing CIDRs
+		}
+		
+		// Check if networks overlap
+		if networksOverlap(newNet, existingCIDR) {
+			errorResponse(w, http.StatusConflict, fmt.Sprintf(
+				"CIDR %s overlaps with existing network '%s' (%s)",
+				network.CIDR, existingNet.Name, existingNet.CIDR,
+			))
+			return
+		}
+	}
 	
-	if err := s.store.CreateNetwork(r.Context(), &network); err != nil {
-		errorResponse(w, http.StatusInternalServerError, "failed to create network")
+	// 1. Assign Interface Name (wg0, wg1, etc)
+	// Find highest 'wgN'
+	maxIdx := -1
+	usedPorts := make(map[int]bool)
+	
+	for _, net := range existing {
+		if strings.HasPrefix(net.InterfaceName, "wg") {
+			var idx int
+			if _, err := fmt.Sscanf(net.InterfaceName, "wg%d", &idx); err == nil {
+				if idx > maxIdx {
+					maxIdx = idx
+				}
+			}
+		}
+		if net.ListenPort > 0 {
+			usedPorts[net.ListenPort] = true
+		}
+	}
+	
+	newIdx := maxIdx + 1
+	network.InterfaceName = fmt.Sprintf("wg%d", newIdx)
+	
+	// 2. Assign Port (Start at 51820)
+	port := 51820
+	for {
+		if !usedPorts[port] {
+			break
+		}
+		port++
+	}
+	network.ListenPort = port
+	
+	// 3. Generate WireGuard keys BEFORE saving to DB
+	privateKey, publicKey, err := wireguard.GenerateKeys()
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to generate WireGuard keys: "+err.Error())
 		return
 	}
 	
-	// Setup WireGuard interface for this network
-	// For MVP we assume one network = one interface (wg0)
-	// In future we might map network ID to interface name
-	cfgGen := wireguard.NewConfigGenerator()
-	// Generate random private key for server if not exists (TODO: store in DB/Vault)
-	// For now we assume server is already configured or we generate config to be applied manually
-	// But PRD says "wg-quick up wg0" happens.
-	// We'll generate a basic config.
-	_ = cfgGen
+	// Set keys and endpoint on network
+	network.ServerPrivateKey = privateKey
+	network.ServerPublicKey = publicKey
+	network.ServerEndpoint = fmt.Sprintf("%s:%d", wireguard.GetServerEndpoint(), port)
+	
+	// 4. Save to DB (now with keys)
+	if err := s.store.CreateNetwork(r.Context(), &network); err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to create network: "+err.Error())
+		return
+	}
+	
+	// 5. Initialize WireGuard Interface
+	mgr := wireguard.NewManager(network.InterfaceName)
+	if err := mgr.Init(); err != nil {
+		fmt.Printf("Warning: WireGuard tools not available: %v\n", err)
+	} else {
+		// Create WireGuard config with the generated key
+		// Calculate server IP (first usable IP in CIDR)
+		_, ipNet, _ := net.ParseCIDR(network.CIDR)
+		serverIP := ipNet.IP
+		serverIP[len(serverIP)-1]++ // .1
+		serverAddr := fmt.Sprintf("%s/24", serverIP.String())
+		
+		if err := mgr.CreateServerConfigWithKey(privateKey, serverAddr, port); err != nil {
+			fmt.Printf("Warning: Failed to create WireGuard config for %s: %v\n", network.Name, err)
+		} else {
+			fmt.Printf("WireGuard interface %s created for network %s\n", network.InterfaceName, network.Name)
+			// Bring up the interface
+			if err := mgr.Up(); err != nil {
+				fmt.Printf("Warning: Failed to bring up %s: %v\n", network.InterfaceName, err)
+			}
+		}
+		
+		// Register manager
+		s.managersMu.Lock()
+		s.managers[network.ID] = mgr
+		s.managersMu.Unlock()
+	}
 	
 	jsonResponse(w, http.StatusCreated, network)
 }
@@ -362,10 +626,47 @@ func (s *Server) handleGetNetwork(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteNetwork(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
+	
+	// Get network first to get interface name
+	network, err := s.store.GetNetwork(r.Context(), id)
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to get network")
+		return
+	}
+	if network == nil {
+		errorResponse(w, http.StatusNotFound, "network not found")
+		return
+	}
+	
+	// Prevent deleting Admin Network (wg0)
+	if network.InterfaceName == "wg0" {
+		errorResponse(w, http.StatusForbidden, "cannot delete Admin Management Network")
+		return
+	}
+	
+	// Bring down WireGuard interface
+	if network.InterfaceName != "" {
+		mgr := wireguard.NewManager(network.InterfaceName)
+		if err := mgr.Down(); err != nil {
+			fmt.Printf("Warning: Failed to bring down %s: %v\n", network.InterfaceName, err)
+		}
+		// Remove config file
+		configPath := fmt.Sprintf("/etc/wireguard/%s.conf", network.InterfaceName)
+		os.Remove(configPath)
+		
+		// Unregister manager
+		s.managersMu.Lock()
+		delete(s.managers, id)
+		s.managersMu.Unlock()
+	}
+	
+	// Delete from DB
 	if err := s.store.DeleteNetwork(r.Context(), id); err != nil {
 		errorResponse(w, http.StatusInternalServerError, "failed to delete network")
 		return
 	}
+	
+	fmt.Printf("Network %s (%s) deleted\n", network.Name, network.InterfaceName)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -380,8 +681,9 @@ func (s *Server) handleListNodes(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch real-time status from WireGuard
 	var peers map[string]wireguard.PeerStatus
-	if s.wgManager != nil {
-		p, err := s.wgManager.GetPeers()
+	mgr := s.getManager(networkID)
+	if mgr != nil {
+		p, err := mgr.GetPeers()
 		if err == nil {
 			peers = p
 		}
@@ -408,8 +710,9 @@ func (s *Server) handleGetNode(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with real-time status
 	var peers map[string]wireguard.PeerStatus
-	if s.wgManager != nil {
-		p, err := s.wgManager.GetPeers()
+	mgr := s.getManager(node.NetworkID)
+	if mgr != nil {
+		p, err := mgr.GetPeers()
 		if err == nil {
 			peers = p
 		}
@@ -429,10 +732,11 @@ func (s *Server) enrichNode(node *models.Node, peers map[string]wireguard.PeerSt
 			isExpired = true
 			
 			// If expired and session exists in WG, remove it
-			if s.wgManager != nil && peers != nil {
+			mgr := s.getManager(node.NetworkID)
+			if mgr != nil && peers != nil {
 				if _, ok := peers[node.PublicKey]; ok {
 					fmt.Printf("Enforcing expiration for node %s (%s)\n", node.Name, node.ID)
-					s.wgManager.RemovePeer(node.PublicKey)
+					mgr.RemovePeer(node.PublicKey)
 				}
 			}
 		}
@@ -564,16 +868,22 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		
 		// If reactivating an expired node, add it back to WireGuard
 		if node.Status == models.NodeStatusExpired && newStatus != models.NodeStatusExpired {
-			fmt.Printf("Reactivating node %s, adding to WireGuard\n", node.Name)
-			if err := s.wgManager.AddPeer(node.PublicKey, node.VirtualIP.String()+"/32"); err != nil {
-				fmt.Printf("Warning: failed to add reactivated peer to WireGuard: %v\n", err)
+			mgr := s.getManager(node.NetworkID)
+			if mgr != nil {
+				fmt.Printf("Reactivating node %s, adding to WireGuard\n", node.Name)
+				if err := mgr.AddPeer(node.PublicKey, node.VirtualIP.String()+"/32"); err != nil {
+					fmt.Printf("Warning: failed to add reactivated peer to WireGuard: %v\n", err)
+				}
 			}
 		}
 		
 		// If disabling/expiring an active node, remove from WireGuard
 		if node.Status != models.NodeStatusExpired && newStatus == models.NodeStatusExpired {
-			if err := s.wgManager.RemovePeer(node.PublicKey); err != nil {
-				fmt.Printf("Warning: failed to remove peer from WireGuard: %v\n", err)
+			mgr := s.getManager(node.NetworkID)
+			if mgr != nil {
+				if err := mgr.RemovePeer(node.PublicKey); err != nil {
+					fmt.Printf("Warning: failed to remove peer from WireGuard: %v\n", err)
+				}
 			}
 		}
 		
@@ -582,10 +892,13 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		// No explicit status change, but check if we're extending an expired node
 		if node.Status == models.NodeStatusExpired && req.ExpiresAt != nil && *req.ExpiresAt != "" {
 			// Node was expired but got new expiration - reactivate it
-			fmt.Printf("Extending expired node %s, reactivating and adding to WireGuard\n", node.Name)
-			node.Status = models.NodeStatusPending
-			if err := s.wgManager.AddPeer(node.PublicKey, node.VirtualIP.String()+"/32"); err != nil {
-				fmt.Printf("Warning: failed to add reactivated peer to WireGuard: %v\n", err)
+			mgr := s.getManager(node.NetworkID)
+			if mgr != nil {
+				fmt.Printf("Extending expired node %s, reactivating and adding to WireGuard\n", node.Name)
+				node.Status = models.NodeStatusPending
+				if err := mgr.AddPeer(node.PublicKey, node.VirtualIP.String()+"/32"); err != nil {
+					fmt.Printf("Warning: failed to add reactivated peer to WireGuard: %v\n", err)
+				}
 			}
 		}
 	}
@@ -612,7 +925,11 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enrich with real-time data before returning
-	peers, _ := s.wgManager.GetPeers()
+	mgr := s.getManager(node.NetworkID)
+	var peers map[string]wireguard.PeerStatus
+	if mgr != nil {
+		peers, _ = mgr.GetPeers()
+	}
 	s.enrichNode(node, peers)
 	jsonResponse(w, http.StatusOK, node)
 }
@@ -632,8 +949,9 @@ func (s *Server) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove from WireGuard
-	if s.wgManager != nil && node.PublicKey != "" {
-		if err := s.wgManager.RemovePeer(node.PublicKey); err != nil {
+	mgr := s.getManager(node.NetworkID)
+	if mgr != nil && node.PublicKey != "" {
+		if err := mgr.RemovePeer(node.PublicKey); err != nil {
 			fmt.Printf("Warning: failed to remove peer from WireGuard: %v\n", err)
 			// Continue with deletion anyway
 		}
@@ -708,6 +1026,132 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"status":  "healthy",
 		"version": "0.1.0",
+	})
+}
+
+// Debug WireGuard - shows interface status and registered peers
+func (s *Server) handleDebugWireGuard(w http.ResponseWriter, r *http.Request) {
+	networkID := mux.Vars(r)["networkId"]
+	
+	result := map[string]interface{}{
+		"network_id": networkID,
+	}
+	
+	// Get network info
+	network, err := s.store.GetNetwork(r.Context(), networkID)
+	if err != nil || network == nil {
+		result["error"] = "network not found"
+		jsonResponse(w, http.StatusNotFound, result)
+		return
+	}
+	
+	result["network_name"] = network.Name
+	result["interface_name"] = network.InterfaceName
+	result["server_public_key"] = network.ServerPublicKey
+	result["server_endpoint"] = network.ServerEndpoint
+	
+	// Check manager
+	s.managersMu.RLock()
+	mgr := s.managers[networkID]
+	s.managersMu.RUnlock()
+	
+	result["manager_registered"] = mgr != nil
+	
+	// Get peers from WireGuard
+	if mgr != nil {
+		peers, err := mgr.GetPeers()
+		if err != nil {
+			result["wg_error"] = err.Error()
+		} else {
+			result["wg_peers_count"] = len(peers)
+			peerList := []map[string]interface{}{}
+			for pubKey, status := range peers {
+				peerList = append(peerList, map[string]interface{}{
+					"public_key":  pubKey,
+					"endpoint":    status.Endpoint,
+					"allowed_ips": status.AllowedIPs,
+					"transfer_rx": status.TransferRx,
+					"transfer_tx": status.TransferTx,
+				})
+			}
+			result["wg_peers"] = peerList
+		}
+	}
+	
+	// Get DB nodes for comparison
+	nodes, err := s.store.ListNodes(r.Context(), networkID)
+	if err == nil {
+		result["db_nodes_count"] = len(nodes)
+		nodeList := []map[string]interface{}{}
+		for _, n := range nodes {
+			nodeList = append(nodeList, map[string]interface{}{
+				"id":         n.ID,
+				"name":       n.Name,
+				"public_key": n.PublicKey,
+				"virtual_ip": n.VirtualIP.String(),
+			})
+		}
+		result["db_nodes"] = nodeList
+	}
+	
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// handleSyncPeers syncs all DB nodes to WireGuard interface
+func (s *Server) handleSyncPeers(w http.ResponseWriter, r *http.Request) {
+	networkID := mux.Vars(r)["networkId"]
+	
+	// Get manager
+	mgr := s.getManager(networkID)
+	if mgr == nil {
+		errorResponse(w, http.StatusInternalServerError, "WireGuard manager not available for this network")
+		return
+	}
+	
+	// Get all nodes from DB
+	nodes, err := s.store.ListNodes(r.Context(), networkID)
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to list nodes: "+err.Error())
+		return
+	}
+	
+	// Get current WireGuard peers
+	currentPeers, err := mgr.GetPeers()
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to get WireGuard peers: "+err.Error())
+		return
+	}
+	
+	added := 0
+	skipped := 0
+	errors := []string{}
+	
+	for _, node := range nodes {
+		if node.PublicKey == "" {
+			continue
+		}
+		
+		// Check if already in WireGuard
+		if _, exists := currentPeers[node.PublicKey]; exists {
+			skipped++
+			continue
+		}
+		
+		// Add to WireGuard
+		allowedIPs := node.VirtualIP.String() + "/32"
+		if err := mgr.AddPeer(node.PublicKey, allowedIPs); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to add %s: %v", node.Name, err))
+		} else {
+			added++
+			fmt.Printf("[SYNC] Added peer %s (%s) to WireGuard\n", node.Name, node.PublicKey[:16]+"...")
+		}
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"added":   added,
+		"skipped": skipped,
+		"errors":  errors,
+		"total":   len(nodes),
 	})
 }
 

@@ -34,11 +34,14 @@ Sizin şəbəkəniz — sizin qaydalarınız.
 
 ## 🚀 Əsas Xüsusiyyətlər
 
+- **Çoxlu Şəbəkə Arxitekturası**
+  Hər birinin öz WireGuard interfeysi, subnet-i və portu olan çoxlu izolyasiya edilmiş VPN şəbəkələri yaradın.
+
 - **Hub-and-Spoke Arxitekturası**
   Qovşaqlar arasında trafikin mərkəzi server vasitəsilə təhlükəsiz yönləndirilməsi.
 
 - **Müasir Veb Dashboard**
-  Qovşaqları idarə etmək, trafiki izləmək və şəbəkəyə nəzarət etmək üçün React əsaslı gözəl interfeys.
+  Şəbəkələri, qovşaqları idarə etmək, trafiki izləmək və VPN-ə nəzarət etmək üçün React əsaslı gözəl interfeys.
 
 - **Bir Kliklə Quraşdırıcı**
   Xüsusi Docker əsaslı quraşdırıcı (installer) ilə NovusMesh-i asanlıqla yerləşdirin və yeniləyin.
@@ -49,6 +52,8 @@ Sizin şəbəkəniz — sizin qaydalarınız.
 - **Defolt Olaraq Təhlükəsiz**
   WireGuard kriptoqrafiyası, JWT autentifikasiyası və daxili kommunikasiya üçün API açarları.
 
+- **Çox Platformalı Client Dəstəyi**
+  Mobil üçün QR kodlar, desktop üçün konfiq yükləmələri, Linux üçün bir sətirlik quraşdırma skriptləri.
 
 ---
 
@@ -66,9 +71,10 @@ Sizin şəbəkəniz — sizin qaydalarınız.
 ## 🧠 Necə İşləyir? (Qısa İzah)
 
 1. **Mərkəzi server** idarəetmə paneli (control plane) rolunu oynayır.
-2. Cihazlar qeydiyyatdan keçir və təhlükəsiz şəkildə autentifikasiya olunur.
-3. WireGuard tunelləri avtomatik olaraq qurulur.
-4. Trafik mərkəzi server üzərindən təhlükəsiz şəkildə yönləndirilir.
+2. Unikal subnet-lərlə (10.x.x.0/24) **izolyasiya edilmiş şəbəkələr** yaradın.
+3. Cihazlar qeydiyyatdan keçir və təhlükəsiz şəkildə autentifikasiya olunur.
+4. WireGuard tunelləri avtomatik olaraq qurulur.
+5. Trafik mərkəzi server üzərindən təhlükəsiz şəkildə yönləndirilir.
 
 Gizli sehir yoxdur.
 Vendor asılılığı (lock-in) yoxdur.
@@ -80,11 +86,34 @@ Sadəcə təmiz şəbəkəçilik.
 
 NovusMesh maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys və yerləşdirməni ayıran **modul sistem** kimi dizayn edilib.
 
+```
++-------------------------------------------------------------+
+|                     NovusMesh Server                        |
+|  +-------------+  +-------------+  +-------------+          |
+|  |  Şəbəkə 1   |  |  Şəbəkə 2   |  |  Şəbəkə N   |          |
+|  |  wg0:51820  |  |  wg1:51821  |  |  wgN:518XX  |          |
+|  | 10.10.0.0/24|  | 10.20.0.0/24|  | 10.XX.0.0/24|          |
+|  +------+------+  +------+------+  +------+------+          |
+|         |                |                |                 |
+|  +------+----------------+----------------+------+          |
+|  |              REST API (Go Backend)            |          |
+|  |                   SQLite DB                   |          |
+|  +-----------------------------------------------+          |
++-------------------------------------------------------------+
+                            |
+              +-------------+-------------+
+              |             |             |
+         +----+----+  +----+----+  +----+----+
+         | Client  |  | Client  |  | Client  |
+         | (Telefon)|  |(Notebook)|  | (Server)|
+         +---------+  +---------+  +---------+
+```
+
 ### 1. Server (Backend)
 📁 `./server`
 
 **Go** dilində yazılmış əsas məntiq.
-WireGuard interfeysini, verilənlər bazasını (SQLite) idarə edir və REST API təqdim edir.
+WireGuard interfeyslərini, SQLite verilənlər bazasını idarə edir və REST API təqdim edir.
 
 - **Developer Guide:** `./server/DEVELOPER_GUIDE_AZ.md`
 - **User Guide:** `./server/USER_GUIDE_AZ.md`
@@ -135,16 +164,10 @@ docker-compose up -d --build
 1. Brauzerdə `http://localhost:3017` ünvanını açın.
 2. Uzaq server məlumatlarınızı daxil edin.
 3. **Install NovusMesh Server** düyməsini sıxın.
-4. Quraşdırma bitdikdən sonra Web Dashboard-u işə salın:
+4. Quraşdırma bitdikdən sonra Admin VPN-ə qoşulun və Web Dashboard-a daxil olun.
 
-```bash
-cd ../web
-docker-compose up -d --build
-```
-
-5. Paneli `http://localhost:3007` ünvanında açın.
-
-**Giriş:** `admin`
+**Dashboard URL:** `https://10.99.0.1:3007` (VPN vasitəsilə)  
+**Giriş:** `admin`  
 **Şifrə:** Quraşdırma zamanı göstərilir.
 
 ---
@@ -152,14 +175,35 @@ docker-compose up -d --build
 ### Əl ilə Quraşdırma (Manual)
 
 Təcrübəli istifadəçilər üçün:
-👉 **[Server İstifadçi Təlimatı](./server/USER_GUIDE_AZ.md)**
+👉 **[Server İstifadəçi Təlimatı](./server/USER_GUIDE_AZ.md)**
+
+---
+
+## 🌐 Şəbəkə İdarəçiliyi
+
+NovusMesh **çoxlu izolyasiya edilmiş şəbəkələri** dəstəkləyir:
+
+| Xüsusiyyət | Təsvir |
+|------------|--------|
+| **İzolyasiya Edilmiş Subnet-lər** | Hər şəbəkənin öz CIDR-i var (məs., 10.10.0.0/24, 10.20.0.0/24) |
+| **Xüsusi İnterfeyslər** | Avtomatik WireGuard interfeys təyinatı (wg0, wg1, wg2...) |
+| **Unikal Portlar** | Hər şəbəkə fərqli UDP portunda dinləyir (51820, 51821...) |
+| **Müstəqil Node-lar** | Node-lar müəyyən şəbəkələrə aiddir və digərlərindən izolyasiya edilib |
+
+### Şəbəkə Yaratmaq
+
+1. Dashboard-da **Networks** səhifəsinə keçin
+2. **Create Network** düyməsinə klikləyin
+3. Ad və CIDR aralığı daxil edin (məs., `10.50.0.0/24`)
+4. Sistem avtomatik olaraq interfeys və port təyin edir
 
 ---
 
 ## 🛡️ Təhlükəsizlik Qeydləri
 
 * Quraşdırıcı **unikal giriş məlumatları** yaradır — onları dərhal yadda saxlayın.
-* UDP port **51820**-nin açıq olduğundan əmin olun.
+* UDP portlarının **51820+** açıq olduğundan əmin olun (hər şəbəkə üçün bir port).
+* Admin dashboard defolt olaraq **VPN arxasında gizlidir**.
 * İstehsalat (production) mühitində Web Dashboard-u **Nginx və ya Caddy (SSL ilə)** arxasında işlədin.
 
 Təhlükəsizlik seçim deyil — bu, standartdır.

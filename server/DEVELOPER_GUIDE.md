@@ -1,87 +1,315 @@
 # NovusMesh Server - Developer Guide
 
 ## Overview
-**NovusMesh Server** is the core component responsible for managing the WireGuard mesh network overlay. It handles peer coordination, configuration distribution, key management, and API access for the dashboard. It is written in **Go** and designed to be high-performance and cloud-native.
+
+**NovusMesh Server** is the core component responsible for managing the WireGuard mesh network overlay. It handles peer coordination, configuration distribution, key management, and API access for the dashboard. Written in **Go**, it's designed to be high-performance and cloud-native.
 
 ## Architecture
 
 ### Tech Stack
-- **Language:** Go 1.21+
-- **Database:** SQLite (embedded via CGO) or PostgreSQL (supported via drivers)
-- **VPN Protocol:** WireGuard (using `wg-quick` and kernel modules)
-- **API:** REST/JSON over HTTP
-- **Auth:** JWT (JSON Web Tokens) for API security
+| Component | Technology |
+|-----------|------------|
+| Language | Go 1.23+ |
+| Database | PostgreSQL 16 |
+| VPN Protocol | WireGuard (`wg-quick` and kernel modules) |
+| API | REST/JSON over HTTP |
+| Authentication | JWT (JSON Web Tokens) + API Key |
+| Router | Gorilla Mux |
 
 ### Directory Structure
 ```
 server/
 ├── cmd/
-│   └── novusmesh-server/  # Main entry point (main.go)
+│   └── control-plane/
+│       └── main.go           # Main entry point (CLI commands)
 ├── internal/
-│   ├── controlplane/      # Business logic & Database layer
-│   │   ├── api/           # REST API handlers
-│   │   ├── db/            # Database storage implementations
-│   │   └── config/        # Environment variable parsing
-│   ├── wireguard/         # WireGuard interface management
-│   └── shared/            # Common utilities
-├── deployments/           # Docker and systemd configs
-└── Makefile               # Build scripts
+│   ├── controlplane/
+│   │   ├── api/
+│   │   │   └── rest/
+│   │   │       └── handlers.go   # REST API handlers
+│   │   └── store/
+│   │       └── store.go          # PostgreSQL database operations
+│   ├── wireguard/
+│   │   ├── manager.go            # WireGuard interface management
+│   │   ├── keys.go               # Key generation
+│   │   ├── config_generator.go   # Configuration generation
+│   │   └── install_script.go     # Client install script
+│   └── shared/
+│       └── models/
+│           └── models.go         # Data models
+├── deployments/
+│   └── docker/
+│       ├── docker-compose.yml    # Orchestration
+│       ├── Dockerfile.control-plane
+│       └── setup-firewall.sh     # Firewall configuration
+├── go.mod                        # Go modules
+└── go.sum                        # Dependency hashes
 ```
 
 ## Core Modules
 
-### 1. Control Plane
-Located in `internal/controlplane`, this module acts as the "brain".
-- **Peers:** Manages the lifecycle of mesh nodes (Create, Delete, Update IP).
-- **IPAM:** Handles IP address allocation for the WireGuard interface (e.g., `10.10.0.x`).
-- **Config Distribution:** Generates and serves valid WireGuard configurations for clients.
+### 1. Control Plane (`internal/controlplane`)
 
-### 2. WireGuard Manager
-Located in `internal/wireguard`.
-- **Interface Management:** Creates and configures the `wg0` interface.
-- **Key Generation:** Handles Private/Public key generation for the server itself.
-- **Peer Sync:** Synchronizes the database state with the actual kernel WireGuard interface.
+This module acts as the system's "brain".
 
-### 3. API Layer
-Exposes endpoints for the Web Dashboard and Installer.
-- `GET /api/v1/nodes`: List active peers.
-- `POST /api/v1/nodes`: Enroll a new peer.
-- `GET /api/v1/config`: Get the server's own public configuration.
+#### API Layer (`api/rest/handlers.go`)
+Provides REST API endpoints:
 
-## Development Setup
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/auth/login` | User login |
+| `PUT` | `/api/v1/auth/password` | Change password |
+| `GET` | `/api/v1/networks` | List networks |
+| `POST` | `/api/v1/networks` | Create new network |
+| `DELETE` | `/api/v1/networks/{id}` | Delete network |
+| `GET` | `/api/v1/networks/{networkId}/nodes` | List nodes |
+| `POST` | `/api/v1/networks/{networkId}/servers` | Create new server/peer |
+| `GET` | `/api/v1/nodes/{id}` | Get node details |
+| `PUT` | `/api/v1/nodes/{id}` | Update node |
+| `DELETE` | `/api/v1/nodes/{id}` | Delete node |
+| `GET` | `/api/v1/nodes/{id}/config` | WireGuard configuration |
+| `GET` | `/api/v1/nodes/{id}/qrcode` | QR code image |
+| `GET` | `/api/v1/users` | List users |
+| `POST` | `/api/v1/users` | Create new user |
+| `DELETE` | `/api/v1/users/{id}` | Delete user |
+| `GET` | `/health` | Health check |
 
-### Prerequisites
-- Go 1.21+ installed.
-- GCC (required for SQLite CGO).
-- WireGuard tools (`wg`, `wg-quick`) installed on the host.
+#### Store Layer (`store/store.go`)
+PostgreSQL database operations:
 
-### Running Locally
-1. **Clone & Enter:**
-   ```bash
-   cd server
-   ```
+```go
+// Core functions
+func (s *Store) CreateNetwork(ctx, network) error
+func (s *Store) GetNetwork(ctx, id) (*Network, error)
+func (s *Store) ListNetworks(ctx) ([]*Network, error)
+func (s *Store) DeleteNetwork(ctx, id) error
 
-2. **Configure Envoronment:**
-   Create a `.env` file or export variables:
-   ```bash
-   export DB_PASSWORD="change_me"
-   export JWT_SECRET="dev_secret_123"
-   export API_KEY="dev_api_key"
-   ```
+func (s *Store) CreateNode(ctx, node) error
+func (s *Store) GetNode(ctx, id) (*Node, error)
+func (s *Store) ListNodes(ctx, networkID) ([]*Node, error)
+func (s *Store) UpdateNode(ctx, node) error
+func (s *Store) DeleteNode(ctx, id) error
+func (s *Store) AllocateIP(ctx, networkID) (net.IP, error)
 
-3. **Run:**
-   ```bash
-   go run ./cmd/novusmesh-server serve
-   ```
-
-### Building
-Use the Makefile for easy builds:
-```bash
-make build       # Builds binary to bin/novusmesh-server
-make docker      # Builds Docker image
+func (s *Store) CreateUser(ctx, user) error
+func (s *Store) GetUserByUsername(ctx, username) (*User, error)
+func (s *Store) UpdateUserPassword(ctx, username, hash) error
 ```
 
+### 2. WireGuard Manager (`internal/wireguard`)
+
+Manages WireGuard interfaces.
+
+#### manager.go
+```go
+type Manager struct {
+    InterfaceName string  // wg0, wg1, ...
+    ConfigPath    string  // /etc/wireguard/wg0.conf
+}
+
+// Core methods
+func (m *Manager) Init() error                    // Verify wg command exists
+func (m *Manager) Up() error                      // wg-quick up
+func (m *Manager) Down() error                    // wg-quick down
+func (m *Manager) AddPeer(pubKey, allowedIPs)     // Add peer
+func (m *Manager) RemovePeer(pubKey)              // Remove peer
+func (m *Manager) GetPeers() map[string]PeerStatus // Get peer statuses
+func (m *Manager) GetPublicKey() (string, error)  // Server public key
+```
+
+#### PeerStatus struct
+```go
+type PeerStatus struct {
+    PublicKey           string
+    Endpoint            string
+    AllowedIPs          string
+    LatestHandshakeTime int64   // Unix timestamp
+    TransferRx          int64   // Bytes received
+    TransferTx          int64   // Bytes sent
+}
+```
+
+### 3. Data Models (`internal/shared/models`)
+
+#### Network
+```go
+type Network struct {
+    ID               string    // UUID
+    Name             string    // "Admin Management", "Office VPN"
+    CIDR             string    // "10.10.0.0/24"
+    ServerPrivateKey string    // WireGuard private key (hidden)
+    ServerPublicKey  string    // WireGuard public key
+    ServerEndpoint   string    // "64.225.108.60:51820"
+    ListenPort       int       // 51820, 51821, ...
+    InterfaceName    string    // "wg0", "wg1", ...
+    CreatedAt        time.Time
+    UpdatedAt        time.Time
+}
+```
+
+#### Node
+```go
+type Node struct {
+    ID         string            // UUID
+    NetworkID  string            // Which network it belongs to
+    Name       string            // "Ali's Laptop"
+    VirtualIP  net.IP            // 10.10.0.5
+    PublicKey  string            // Client public key
+    Labels     map[string]string // Metadata
+    Status     NodeStatus        // pending/online/offline/expired
+    LastSeen   time.Time
+    PublicIP   string            // Real IP (from endpoint)
+    TransferRx int64             // Download bytes
+    TransferTx int64             // Upload bytes
+    ExpiresAt  *time.Time        // Expiration time (optional)
+    NodeInfo   *NodeInfo         // OS, arch, hostname
+    CreatedAt  time.Time
+}
+```
+
+#### NodeStatus
+```go
+const (
+    NodeStatusPending NodeStatus = "pending"   // Awaiting configuration
+    NodeStatusOnline  NodeStatus = "online"    // Active connection
+    NodeStatusOffline NodeStatus = "offline"   // No connection
+    NodeStatusExpired NodeStatus = "expired"   // Time expired
+)
+```
+
+## CLI Commands
+
+Server provides CLI via `cobra` library:
+
+```bash
+# Start server
+novusmesh-server serve --listen :8080 --grpc-listen :8443
+
+# Database migration
+novusmesh-server migrate --database "postgres://..."
+
+# Network initialization
+novusmesh-server init --name "Admin Network" --cidr "10.99.0.0/24"
+
+# Version
+novusmesh-server version
+```
+
+## Middlewares
+
+### 1. AuthMiddleware
+JWT token validation:
+```go
+// Authorization: Bearer <token>
+// /health and /login endpoints are exempt
+```
+
+### 2. APIKeyMiddleware
+API key validation:
+```go
+// X-API-Key: <key>
+// Skipped in dev mode (empty key)
+```
+
+### 3. LoggingMiddleware
+Request logging (currently placeholder).
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `novusmesh_LISTEN` | HTTP API port | `:8080` |
+| `novusmesh_GRPC_LISTEN` | gRPC port | `:8443` |
+| `JWT_SECRET` | Token signing key | Required |
+| `novusmesh_API_KEY` | API key | Required |
+| `ADMIN_USERNAME` | Initial admin username | `admin` |
+| `ADMIN_PASSWORD` | Initial admin password | Required |
+| `WG_SERVER_ENDPOINT` | Server public IP | Required |
+| `ADMIN_CIDR` | Admin network CIDR | `10.99.0.0/24` |
+
+## Docker Deployment
+
+### docker-compose.yml structure
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Database
+
+  control-plane:
+    build: ...
+    network_mode: host      # Critical for WireGuard!
+    cap_add:
+      - NET_ADMIN           # Network management
+      - SYS_MODULE          # Kernel modules
+    volumes:
+      - /etc/wireguard:/etc/wireguard:rw  # Host WireGuard
+
+  web:
+    build: ...
+    network_mode: host
+```
+
+### Important Notes
+- `network_mode: host` - Required for WireGuard traffic to work properly
+- `/etc/wireguard` mount - Access to host's WireGuard configuration
+- `NET_ADMIN` capability - Required to manage network interfaces
+
+## Development
+
+### Local Development
+```bash
+cd server
+
+# Download dependencies
+go mod download
+
+# Set environment variables
+export DATABASE_URL="postgres://novusmesh:password@localhost:5432/novusmesh?sslmode=disable"
+export JWT_SECRET="dev_secret"
+export novusmesh_API_KEY="dev_key"
+export ADMIN_PASSWORD="admin123"
+
+# Run
+go run ./cmd/control-plane serve
+```
+
+### Build
+```bash
+# Binary build
+go build -o novusmesh-server ./cmd/control-plane
+
+# Docker build
+docker build -f deployments/docker/Dockerfile.control-plane -t novusmesh-server .
+```
+
+### Test
+```bash
+go test ./...
+```
+
+## Security
+
+1. **JWT Tokens** - New admin token generated on each startup
+2. **API Key** - Required for all API calls
+3. **Bcrypt** - Passwords are hashed
+4. **Behind VPN** - Admin panel only accessible via wg0
+5. **CORS** - All origins allowed (for development)
+
+## Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| "wg command not found" | WireGuard not installed | `apt install wireguard-tools` |
+| "permission denied" | Missing NET_ADMIN capability | Check `cap_add` in Docker |
+| "database connection refused" | PostgreSQL not running | Check container status |
+| "interface already exists" | wg0 already exists | `wg-quick down wg0` |
+| Peers not visible | Manager not initialized | Check server logs |
+
 ## Contributing
-- **Code Style:** Follow standard `gofmt` and Go idioms.
-- **Testing:** Add unit tests for logic in `internal/`.
-- **Migration:** Database schema changes must be added as SQL migration files.
+
+1. **Code Style** - Follow `gofmt` and Go idioms
+2. **Testing** - Add unit tests for `internal/`
+3. **Migration** - Schema changes must be added as SQL migration files
+4. **Documentation** - Update guides for new features

@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { DashboardPage } from './pages/Dashboard';
 import { NodesPage, NodeDetailPage } from './pages/Nodes';
 import { SettingsPage } from './pages/Settings';
+import { Networks } from './pages/Networks';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -128,6 +129,7 @@ function App() {
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="networks" element={<Networks />} />
             <Route path="nodes" element={<NodesPage />} />
             <Route path="nodes/:id" element={<NodeDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />

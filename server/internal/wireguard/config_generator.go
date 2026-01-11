@@ -37,8 +37,8 @@ func (g *ConfigGenerator) GenerateServerConfig(privateKey string, port int, addr
 	sb.WriteString(fmt.Sprintf("Address = %s\n", addressCIDR))
 	sb.WriteString(fmt.Sprintf("ListenPort = %d\n", port))
 	sb.WriteString("SaveConfig = false\n") // We manage peers manually/via DB
-	sb.WriteString("PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\n")
-	sb.WriteString("PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\n")
+	sb.WriteString("PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o $(ip route get 8.8.8.8 | awk '{print $5; exit}') -j MASQUERADE\n")
+	sb.WriteString("PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o $(ip route get 8.8.8.8 | awk '{print $5; exit}') -j MASQUERADE\n")
 
 	return sb.String()
 }
