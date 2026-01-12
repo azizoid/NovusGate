@@ -1,8 +1,8 @@
-# NovusMesh Server - Developer Təlimatı
+# NovusGate Server - Developer Təlimatı
 
 ## İcmal
 
-**NovusMesh Server**, WireGuard mesh şəbəkə overlay-ini idarə edən əsas komponentdir. Peer koordinasiyası, konfiqurasiya paylanması, açar idarəetməsi və dashboard üçün API girişini təmin edir. **Go** dilində yazılıb və yüksək performanslı, cloud-native dizayn edilib.
+**NovusGate Server**, WireGuard mesh şəbəkə overlay-ini idarə edən əsas komponentdir. Peer koordinasiyası, konfiqurasiya paylanması, açar idarəetməsi və dashboard üçün API girişini təmin edir. **Go** dilində yazılıb və yüksək performanslı, cloud-native dizayn edilib.
 
 ## Arxitektura
 
@@ -183,16 +183,16 @@ Server `cobra` kitabxanası ilə CLI təmin edir:
 
 ```bash
 # Serveri işə sal
-novusmesh-server serve --listen :8080 --grpc-listen :8443
+NovusGate-server serve --listen :8080 --grpc-listen :8443
 
 # Verilənlər bazası miqrasiyası
-novusmesh-server migrate --database "postgres://..."
+NovusGate-server migrate --database "postgres://..."
 
 # Şəbəkə inisializasiyası
-novusmesh-server init --name "Admin Network" --cidr "10.99.0.0/24"
+NovusGate-server init --name "Admin Network" --cidr "10.99.0.0/24"
 
 # Versiya
-novusmesh-server version
+NovusGate-server version
 ```
 
 ## Middleware-lər
@@ -219,10 +219,10 @@ Request logging (hazırda placeholder).
 | Dəyişən | Təsvir | Default |
 |---------|--------|---------|
 | `DATABASE_URL` | PostgreSQL bağlantı string-i | Məcburi |
-| `novusmesh_LISTEN` | HTTP API portu | `:8080` |
-| `novusmesh_GRPC_LISTEN` | gRPC portu | `:8443` |
+| `NovusGate_LISTEN` | HTTP API portu | `:8080` |
+| `NovusGate_GRPC_LISTEN` | gRPC portu | `:8443` |
 | `JWT_SECRET` | Token imzalama açarı | Məcburi |
-| `novusmesh_API_KEY` | API açarı | Məcburi |
+| `NovusGate_API_KEY` | API açarı | Məcburi |
 | `ADMIN_USERNAME` | İlk admin istifadəçi adı | `admin` |
 | `ADMIN_PASSWORD` | İlk admin parolu | Məcburi |
 | `WG_SERVER_ENDPOINT` | Server public IP | Məcburi |
@@ -266,9 +266,9 @@ cd server
 go mod download
 
 # Mühit dəyişənlərini təyin et
-export DATABASE_URL="postgres://novusmesh:password@localhost:5432/novusmesh?sslmode=disable"
+export DATABASE_URL="postgres://NovusGate:password@localhost:5432/NovusGate?sslmode=disable"
 export JWT_SECRET="dev_secret"
-export novusmesh_API_KEY="dev_key"
+export NovusGate_API_KEY="dev_key"
 export ADMIN_PASSWORD="admin123"
 
 # İşə sal
@@ -278,10 +278,10 @@ go run ./cmd/control-plane serve
 ### Build
 ```bash
 # Binary build
-go build -o novusmesh-server ./cmd/control-plane
+go build -o NovusGate-server ./cmd/control-plane
 
 # Docker build
-docker build -f deployments/docker/Dockerfile.control-plane -t novusmesh-server .
+docker build -f deployments/docker/Dockerfile.control-plane -t NovusGate-server .
 ```
 
 ### Test

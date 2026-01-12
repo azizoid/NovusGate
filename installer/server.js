@@ -4,7 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
-const logService = require('./log_service'); // Import Log Service
+const logService = require('./modules/log_service'); // Import Log Service
+const fail2banModule = require('./modules/fail2ban'); // Import Fail2ban Module
 
 const app = express();
 app.use(cors());
@@ -155,24 +156,39 @@ app.get('/api/servers/:id/status', async (req, res) => {
   try {
     const conn = await createSSHConnection(server);
     
-    // Check novusmesh installation
-    const novusmeshCheck = await execSSH(conn, 'test -d /opt/novusmesh && echo "installed" || echo "not_installed"');
-    const isInstalled = novusmeshCheck.stdout.trim() === 'installed';
+    // Check NovusGate installation
+    const NovusGateCheck = await execSSH(conn, 'test -d /opt/NovusGate && echo "installed" || echo "not_installed"');
+    const isInstalled = NovusGateCheck.stdout.trim() === 'installed';
     
     // Check Docker containers
-    const dockerPs = await execSSH(conn, 'docker ps --format "{{.Names}}|{{.Status}}|{{.Ports}}" 2>/dev/null | grep novusmesh || true');
+    const dockerPs = await execSSH(conn, 'docker ps --format "{{.Names}}|{{.Status}}|{{.Ports}}" 2>/dev/null | grep NovusGate || true');
     const containers = dockerPs.stdout.trim().split('\n').filter(Boolean).map(line => {
       const [name, status, ports] = line.split('|');
       return { name, status, ports };
     });
     
-    // Check disk space
-    const diskCheck = await execSSH(conn, 'df -h / | tail -1 | awk \'{print $4}\'');
-    const freeSpace = diskCheck.stdout.trim();
+    // Check disk space - total and used
+    const diskCheck = await execSSH(conn, "df -h / | tail -1 | awk '{print $2\"|\"$3\"|\"$4\"|\"$5}'");
+    const diskParts = diskCheck.stdout.trim().split('|');
+    const totalDisk = diskParts[0] || 'N/A';
+    const usedDisk = diskParts[1] || 'N/A';
+    const freeSpace = diskParts[2] || 'N/A';
+    const diskPercent = diskParts[3] || 'N/A';
     
-    // Check memory
-    const memCheck = await execSSH(conn, 'free -h | grep Mem | awk \'{print $4}\'');
-    const freeMemory = memCheck.stdout.trim();
+    // Check memory - total, used, available
+    const memCheck = await execSSH(conn, "free -h | grep Mem | awk '{print $2\"|\"$3\"|\"$7}'");
+    const memParts = memCheck.stdout.trim().split('|');
+    const totalMemory = memParts[0] || 'N/A';
+    const usedMemory = memParts[1] || 'N/A';
+    const freeMemory = memParts[2] || 'N/A';
+    
+    // Check CPU usage
+    const cpuCheck = await execSSH(conn, "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1");
+    const cpuUsage = cpuCheck.stdout.trim() || 'N/A';
+    
+    // Check uptime
+    const uptimeCheck = await execSSH(conn, "uptime -p 2>/dev/null || uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1}'");
+    const uptime = uptimeCheck.stdout.trim() || 'N/A';
     
     conn.end();
     
@@ -188,8 +204,18 @@ app.get('/api/servers/:id/status', async (req, res) => {
       status: server.status,
       isInstalled,
       containers,
+      // Disk info
+      totalDisk,
+      usedDisk,
       freeSpace,
+      diskPercent,
+      // Memory info
+      totalMemory,
+      usedMemory,
       freeMemory,
+      // CPU & Uptime
+      cpuUsage,
+      uptime,
       lastCheck: server.lastCheck
     });
     
@@ -438,7 +464,91 @@ app.delete('/api/servers/:id/volumes/:name', async (req, res) => {
   }
 });
 
-// POST /api/servers/:id/uninstall - Clean uninstall novusmesh
+// GET /api/servers/:id/credentials - Get credentials from server's .env file
+app.get('/api/servers/:id/credentials', async (req, res) => {
+  const data = loadServers();
+  const server = data.servers.find(s => s.id === req.params.id);
+  
+  if (!server) {
+    return res.status(404).json({ error: 'Server not found' });
+  }
+  
+  try {
+    const conn = await createSSHConnection(server);
+    
+    // Read .env file from server
+    const envResult = await execSSH(conn, 'cat /opt/NovusGate/server/deployments/docker/.env 2>/dev/null || echo "NOT_FOUND"');
+    
+    if (envResult.stdout.trim() === 'NOT_FOUND') {
+      conn.end();
+      return res.status(404).json({ error: 'NovusGate not installed or .env file not found' });
+    }
+    
+    // Parse .env file
+    const envContent = envResult.stdout;
+    const parseEnv = (key) => {
+      const match = envContent.match(new RegExp(`^${key}=(.*)$`, 'm'));
+      return match ? match[1].trim() : null;
+    };
+    
+    const credentials = {
+      adminUser: parseEnv('ADMIN_USERNAME') || 'admin',
+      adminPass: parseEnv('ADMIN_PASSWORD'),
+      apiKey: parseEnv('API_KEY'),
+      dbName: parseEnv('DB_NAME'),
+      dbUser: parseEnv('DB_USER'),
+      dbPass: parseEnv('DB_PASSWORD'),
+      jwtSecret: parseEnv('JWT_SECRET'),
+      vpnIp: parseEnv('VPN_IP') || '10.99.0.1'
+    };
+    
+    conn.end();
+    res.json(credentials);
+    
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/servers/:id/vpn-config - Get admin VPN config from server
+app.get('/api/servers/:id/vpn-config', async (req, res) => {
+  const data = loadServers();
+  const server = data.servers.find(s => s.id === req.params.id);
+  
+  if (!server) {
+    return res.status(404).json({ error: 'Server not found' });
+  }
+  
+  try {
+    const conn = await createSSHConnection(server);
+    
+    // Try to read admin VPN config - check multiple locations
+    const configResult = await execSSH(conn, `
+      if [ -f /tmp/admin-vpn.conf ]; then
+        cat /tmp/admin-vpn.conf
+      elif [ -f /opt/NovusGate/admin-vpn.conf ]; then
+        cat /opt/NovusGate/admin-vpn.conf
+      elif [ -f /root/admin-vpn.conf ]; then
+        cat /root/admin-vpn.conf
+      else
+        echo "NOT_FOUND"
+      fi
+    `);
+    
+    conn.end();
+    
+    if (configResult.stdout.trim() === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'VPN config not found. It may have been deleted after installation.' });
+    }
+    
+    res.json({ config: configResult.stdout.trim() });
+    
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/servers/:id/uninstall - Clean uninstall NovusGate
 app.post('/api/servers/:id/uninstall', async (req, res) => {
   const data = loadServers();
   const server = data.servers.find(s => s.id === req.params.id);
@@ -470,7 +580,7 @@ app.post('/api/servers/:id/uninstall', async (req, res) => {
   }
 });
 
-// POST /api/servers/:id/install - Install novusmesh
+// POST /api/servers/:id/install - Install NovusGate
 app.post('/api/servers/:id/install', async (req, res) => {
   const { source = 'local', reinstall = false, update = false, migrateOnly = false } = req.body;
   
@@ -517,7 +627,7 @@ app.post('/api/servers/:id/install', async (req, res) => {
     if (archivePath) {
       sendLog('[INFO] Uploading archive to server (this may take a moment)...');
       try {
-        await uploadFile(conn, archivePath, '/tmp/novusmesh.tar.gz');
+        await uploadFile(conn, archivePath, '/tmp/NovusGate.tar.gz');
         sendLog('[INFO] Upload complete.');
       } catch (uploadErr) {
         sendLog(`[ERROR] Upload failed: ${uploadErr.message}`, true);
@@ -738,7 +848,7 @@ const GENERATE_INSTALL_SCRIPT = (config) => `
 #!/bin/bash
 set -e
 
-INSTALL_DIR="/opt/novusmesh"
+INSTALL_DIR="/opt/NovusGate"
 RED='\\033[0;31m'
 GREEN='\\033[0;32m'
 YELLOW='\\033[1;33m'
@@ -752,8 +862,8 @@ VPN_SUBNET="${config.vpnIp ? config.vpnIp.replace(/\.\d+$/, '.0/24') : '10.99.0.
 VPN_CLIENT_IP="${config.vpnIp ? config.vpnIp.replace(/\.\d+$/, '.2') : '10.99.0.2'}"
 
 # Database Config
-DB_NAME="${config.dbName || 'novusmesh'}"
-DB_USER="${config.dbUser || 'novusmesh'}"
+DB_NAME="${config.dbName || 'NovusGate'}"
+DB_USER="${config.dbUser || 'NovusGate'}"
 DB_PASSWORD="${config.dbPassword || ''}" # Empty means auto-generate
 
 log_info() { echo -e "\${GREEN}[INFO]\${NC} $1"; }
@@ -761,7 +871,7 @@ log_warn() { echo -e "\${YELLOW}[WARN]\${NC} $1"; }
 log_error() { echo -e "\${RED}[ERROR]\${NC} $1"; }
 
 echo "=========================================="
-echo "  NovusMesh Server Installer"
+echo "  NovusGate Server Installer"
 echo "=========================================="
 
 # Update system
@@ -787,8 +897,8 @@ fi
 # Extract archive
 log_info "Extracting archive..."
 mkdir -p "$INSTALL_DIR"
-tar -xzf /tmp/novusmesh.tar.gz -C "$INSTALL_DIR"
-rm -f /tmp/novusmesh.tar.gz
+tar -xzf /tmp/NovusGate.tar.gz -C "$INSTALL_DIR"
+rm -f /tmp/NovusGate.tar.gz
 
 # Generate secrets
 log_info "Generating security keys..."
@@ -825,8 +935,8 @@ log_info "Cleaning up previous VPN state..."
 
 # 1. Stop existing Docker containers holding ports
 if command -v docker &> /dev/null; then
-  docker ps -q --filter name=novusmesh | xargs -r docker stop || true
-  docker ps -q --filter name=novusmesh | xargs -r docker rm || true
+  docker ps -q --filter name=NovusGate | xargs -r docker stop || true
+  docker ps -q --filter name=NovusGate | xargs -r docker rm || true
 fi
 
 # 2. Stop Systemd Services
@@ -844,6 +954,36 @@ rm -f /etc/wireguard/wg1.conf # Clean old wg1 if exists
 if ! command -v wg &> /dev/null; then
   log_info "Installing WireGuard..."
   apt-get install -y wireguard
+fi
+
+# Install Fail2Ban for SSH protection
+if ! command -v fail2ban-client &> /dev/null; then
+  log_info "Installing Fail2Ban..."
+  apt-get install -y fail2ban
+  
+  # Create SSH jail config
+  cat <<F2B > /etc/fail2ban/jail.local
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+F2B
+
+  # Enable and start fail2ban
+  systemctl enable fail2ban
+  systemctl restart fail2ban
+  log_info "Fail2Ban installed and configured ✓"
+else
+  log_info "Fail2Ban already installed ✓"
 fi
 
 # Generate Keys
@@ -884,6 +1024,9 @@ Endpoint = $SERVER_IP:51820
 AllowedIPs = $VPN_SUBNET
 PersistentKeepalive = 25
 CLIENT
+
+# Also save to permanent location
+cp /tmp/admin-vpn.conf $INSTALL_DIR/admin-vpn.conf
 
 log_info "Admin VPN configured."
 
@@ -946,7 +1089,7 @@ sleep 30
 # Initialize
 log_info "Skipping default network creation (Admin Network is auto-created)..."
 # We DO NOT run init anymore, because we only want the Admin Network initially.
-# INIT_OUTPUT=$(docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server init --name "$NETWORK_NAME" --cidr "$NETWORK_CIDR" 2>&1 || true)
+# INIT_OUTPUT=$(docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./NovusGate-server init --name "$NETWORK_NAME" --cidr "$NETWORK_CIDR" 2>&1 || true)
 # echo "$INIT_OUTPUT"
 
 SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -988,14 +1131,14 @@ echo "JWT_SECRET:  $JWT_SECRET"
 echo "------------------------------------------"
 echo "These keys were automatically written to deployments/docker/.env"
 echo ""
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep novusmesh || true
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep NovusGate || true
 `;
 
 
 const GENERATE_REINSTALL_SCRIPT = (config) => {
   // Config Defaults
-  const DB_NAME = config.dbName || 'novusmesh';
-  const DB_USER = config.dbUser || 'novusmesh';
+  const DB_NAME = config.dbName || 'NovusGate';
+  const DB_USER = config.dbUser || 'NovusGate';
   const DB_PASS = config.dbPassword || ''; // If empty, generate or keep old?
   const ADMIN_USER = config.adminUsername || 'admin';
   const ADMIN_PASS = config.adminPassword || '';
@@ -1008,16 +1151,16 @@ const GENERATE_REINSTALL_SCRIPT = (config) => {
 #!/bin/bash
 set -e
 
-INSTALL_DIR="/opt/novusmesh"
+INSTALL_DIR="/opt/NovusGate"
 
 echo "=========================================="
-echo "  NovusMesh REINSTALL"
+echo "  NovusGate REINSTALL"
 echo "=========================================="
 
 # Backup .env before deleting
 if [ -f "$INSTALL_DIR/server/deployments/docker/.env" ]; then
   echo "Preserving old config..."
-  cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/novusmesh.env.bak
+  cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/NovusGate.env.bak
 fi
 
 # Stop and remove existing
@@ -1035,19 +1178,19 @@ fi
 
 # Extract new
 mkdir -p "$INSTALL_DIR"
-tar -xzf /tmp/novusmesh.tar.gz -C "$INSTALL_DIR"
-rm -f /tmp/novusmesh.tar.gz
+tar -xzf /tmp/NovusGate.tar.gz -C "$INSTALL_DIR"
+rm -f /tmp/NovusGate.tar.gz
 
 # Note: In reinstall, we might want to keep old secrets or generate new ones?
 # Usually reinstall means "nuclear option", so let's check if .env exists, if so keep it, else generate
 cd "$INSTALL_DIR"
 
 # Restore or generate .env
-if [ -f "/tmp/novusmesh.env.bak" ]; then
+if [ -f "/tmp/NovusGate.env.bak" ]; then
   echo "Restoring configuration..."
   # Creating directory structure if missing after clean
   mkdir -p server/deployments/docker
-  mv /tmp/novusmesh.env.bak server/deployments/docker/.env
+  mv /tmp/NovusGate.env.bak server/deployments/docker/.env
   
   # Ensure WG_SERVER_ENDPOINT exists
   if ! grep -q "WG_SERVER_ENDPOINT" server/deployments/docker/.env; then
@@ -1106,6 +1249,34 @@ EOF
   chmod 600 web/.env
 fi
 
+# Ensure Fail2Ban is installed
+if ! command -v fail2ban-client &> /dev/null; then
+  echo "Installing Fail2Ban..."
+  apt-get update -qq
+  apt-get install -y fail2ban
+  
+  # Create SSH jail config
+  cat <<F2B > /etc/fail2ban/jail.local
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+F2B
+
+  systemctl enable fail2ban
+  systemctl restart fail2ban
+  echo "Fail2Ban installed ✓"
+fi
+
 # Setup Firewall (re-run to ensure rules match new config if relevant, though mostly static)
 if [ -f "$INSTALL_DIR/server/deployments/docker/setup-firewall.sh" ]; then
   # Fix Windows CRLF line endings
@@ -1122,11 +1293,11 @@ echo "Waiting for DB..."
 sleep 20
 
 # Init with dynamic params
-echo "Re-Initializing NovusMesh Control Plane..."
+echo "Re-Initializing NovusGate Control Plane..."
 # Init command skipped (Admin Network auto-bootstrapped)
 
 echo "REINSTALL COMPLETE!"
-docker ps | grep novusmesh || true
+docker ps | grep NovusGate || true
 `;
 };
 
@@ -1135,10 +1306,10 @@ docker ps | grep novusmesh || true
 const UNINSTALL_SCRIPT = `
 #!/bin/bash
 set -e
-INSTALL_DIR="/opt/novusmesh"
+INSTALL_DIR="/opt/NovusGate"
 
 echo "=========================================="
-echo "  NovusMesh DEEP UNINSTALL"
+echo "  NovusGate DEEP UNINSTALL"
 echo "  WARNING: This will delete ALL data"
 echo "=========================================="
 
@@ -1148,9 +1319,9 @@ if [ -f "$INSTALL_DIR/server/deployments/docker/docker-compose.yml" ]; then
   docker-compose -f server/deployments/docker/docker-compose.yml down -v --rmi all --remove-orphans 2>/dev/null || true
 fi
 
-# Fallback: kill any novusmesh containers
-docker ps -q --filter name=novusmesh | xargs -r docker stop || true
-docker ps -a --format "{{.ID}} {{.Names}}" | grep novusmesh | awk '{print $1}' | xargs -r docker rm -f || true
+# Fallback: kill any NovusGate containers
+docker ps -q --filter name=NovusGate | xargs -r docker stop || true
+docker ps -a --format "{{.ID}} {{.Names}}" | grep NovusGate | awk '{print $1}' | xargs -r docker rm -f || true
 
 echo "[2/5] Cleaning WireGuard Interfaces..."
 # Stop Admin VPN
@@ -1187,18 +1358,21 @@ fi
 echo "[4/5] Removing Files..."
 rm -rf "$INSTALL_DIR"
 
-echo "[5/5] Cleanup Complete!"
+echo "[5/5] Cleaning Docker Resources..."
+docker system prune -af --volumes 2>/dev/null || true
+
+echo "[DONE] Cleanup Complete!"
 echo "Server is ready for a fresh install."
 `;
 
 const UPDATE_SCRIPT = `
 #!/bin/bash
 set -e
-INSTALL_DIR="/opt/novusmesh"
-TEMP_DIR="/tmp/novusmesh_update"
+INSTALL_DIR="/opt/NovusGate"
+TEMP_DIR="/tmp/NovusGate_update"
 
 echo "=========================================="
-echo "  NovusMesh SMART UPDATE v2.0"
+echo "  NovusGate SMART UPDATE v2.0"
 echo "  Only changed files & containers updated"
 echo "=========================================="
 
@@ -1206,8 +1380,8 @@ echo "=========================================="
 echo "[1/6] Extracting new files..."
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
-tar -xzf /tmp/novusmesh.tar.gz -C "$TEMP_DIR"
-rm -f /tmp/novusmesh.tar.gz
+tar -xzf /tmp/NovusGate.tar.gz -C "$TEMP_DIR"
+rm -f /tmp/NovusGate.tar.gz
 
 # 2. Detect what changed
 echo "[2/6] Detecting changes..."
@@ -1288,15 +1462,15 @@ if command -v rsync &> /dev/null; then
     "$TEMP_DIR/" "$INSTALL_DIR/"
 else
   # Backup .env files
-  [ -f "$INSTALL_DIR/server/deployments/docker/.env" ] && cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/novusmesh.env.bak
-  [ -f "$INSTALL_DIR/web/.env" ] && cp "$INSTALL_DIR/web/.env" /tmp/novusmesh.web.env.bak
+  [ -f "$INSTALL_DIR/server/deployments/docker/.env" ] && cp "$INSTALL_DIR/server/deployments/docker/.env" /tmp/NovusGate.env.bak
+  [ -f "$INSTALL_DIR/web/.env" ] && cp "$INSTALL_DIR/web/.env" /tmp/NovusGate.web.env.bak
   
   # Copy files
   cp -r "$TEMP_DIR"/* "$INSTALL_DIR/"
   
   # Restore .env files
-  [ -f "/tmp/novusmesh.env.bak" ] && mv /tmp/novusmesh.env.bak "$INSTALL_DIR/server/deployments/docker/.env"
-  [ -f "/tmp/novusmesh.web.env.bak" ] && mv /tmp/novusmesh.web.env.bak "$INSTALL_DIR/web/.env"
+  [ -f "/tmp/NovusGate.env.bak" ] && mv /tmp/NovusGate.env.bak "$INSTALL_DIR/server/deployments/docker/.env"
+  [ -f "/tmp/NovusGate.web.env.bak" ] && mv /tmp/NovusGate.web.env.bak "$INSTALL_DIR/web/.env"
 fi
 
 rm -rf "$TEMP_DIR"
@@ -1336,7 +1510,7 @@ fi
 echo "[5/6] Checking database..."
 if [ "$SERVER_CHANGED" = true ]; then
   sleep 5
-  docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate 2>&1 || echo "Migration skipped"
+  docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./NovusGate-server migrate 2>&1 || echo "Migration skipped"
 else
   echo "  Server unchanged - skipping migration"
 fi
@@ -1366,24 +1540,24 @@ if [ "$SERVER_CHANGED" = false ] && [ "$WEB_CHANGED" = false ]; then echo "  ✅
 echo "  ✅ .env preserved"
 echo "  ✅ Database preserved"
 echo "=========================================="
-docker ps --format "table {{.Names}}\\t{{.Status}}" | grep novusmesh || true
+docker ps --format "table {{.Names}}\\t{{.Status}}" | grep NovusGate || true
 `;
 
 // Database-only migration script (no file changes)
 const DATABASE_MIGRATE_SCRIPT = `
 #!/bin/bash
 set -e
-INSTALL_DIR="/opt/novusmesh"
+INSTALL_DIR="/opt/NovusGate"
 
 echo "=========================================="
-echo "  NovusMesh DATABASE MIGRATION"
+echo "  NovusGate DATABASE MIGRATION"
 echo "  Files PRESERVED"
 echo "=========================================="
 
 cd "$INSTALL_DIR"
 
 echo "[1/2] Checking database migrations..."
-docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./novusmesh-server migrate
+docker-compose -f server/deployments/docker/docker-compose.yml exec -T control-plane ./NovusGate-server migrate
 
 echo ""
 echo "=========================================="
@@ -1392,7 +1566,7 @@ echo "=========================================="
 `;
 function createProjectArchive() {
   return new Promise((resolve, reject) => {
-    const archivePath = path.join(__dirname, 'novusmesh.tar.gz');
+    const archivePath = path.join(__dirname, 'NovusGate.tar.gz');
     
     const excludes = [
       '--exclude=node_modules',
@@ -1439,9 +1613,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: '2.0.0' });
 });
 
+// Register Fail2ban routes
+fail2banModule.registerRoutes(app, loadServers, createSSHConnection);
+
 // Start server
 const PORT = process.env.PORT || 3017;
 app.listen(PORT, () => {
-  console.log(`novusmesh Server Manager: http://localhost:${PORT}`);
+  console.log(`NovusGate Server Manager: http://localhost:${PORT}`);
   console.log(`Server data: ${SERVERS_FILE}`);
 });

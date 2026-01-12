@@ -3,6 +3,10 @@ import type {
   Network,
   Node,
   CreateNetworkForm,
+  SystemInfo,
+  Fail2BanStatus,
+  Fail2BanLogs,
+  StatsOverview,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -122,6 +126,33 @@ class ApiClient {
   // Health check
   async healthCheck(): Promise<{ status: string; version: string }> {
     const { data } = await this.client.get('/health');
+    return data;
+  }
+
+  // System Info
+  async getSystemInfo(): Promise<SystemInfo> {
+    const { data } = await this.client.get('/system/info');
+    return data;
+  }
+
+  // Fail2Ban
+  async getFail2BanStatus(): Promise<Fail2BanStatus> {
+    const { data } = await this.client.get('/system/fail2ban/status');
+    return data;
+  }
+
+  async getFail2BanLogs(lines: number = 100): Promise<Fail2BanLogs> {
+    const { data } = await this.client.get(`/system/fail2ban/logs?lines=${lines}`);
+    return data;
+  }
+
+  async unbanIP(jail: string, ip: string): Promise<void> {
+    await this.client.post('/system/fail2ban/unban', { jail, ip });
+  }
+
+  // Stats Overview (all networks)
+  async getStatsOverview(): Promise<StatsOverview> {
+    const { data } = await this.client.get('/stats/overview');
     return data;
   }
 }
@@ -261,5 +292,49 @@ export function useDeleteUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
+  });
+}
+
+// System Info hooks
+export function useSystemInfo() {
+  return useQuery({
+    queryKey: ['systemInfo'],
+    queryFn: () => api.getSystemInfo(),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+}
+
+// Fail2Ban hooks
+export function useFail2BanStatus() {
+  return useQuery({
+    queryKey: ['fail2ban', 'status'],
+    queryFn: () => api.getFail2BanStatus(),
+    refetchInterval: 30000,
+  });
+}
+
+export function useFail2BanLogs(lines: number = 100) {
+  return useQuery({
+    queryKey: ['fail2ban', 'logs', lines],
+    queryFn: () => api.getFail2BanLogs(lines),
+  });
+}
+
+export function useUnbanIP() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { jail: string; ip: string }) => api.unbanIP(data.jail, data.ip),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fail2ban'] });
+    },
+  });
+}
+
+// Stats Overview hook
+export function useStatsOverview() {
+  return useQuery({
+    queryKey: ['stats', 'overview'],
+    queryFn: () => api.getStatsOverview(),
+    refetchInterval: 30000,
   });
 }

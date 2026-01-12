@@ -3,34 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NovusMesh Server Manager</title>
+  <title>NovusGate Server Manager</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --bg-card: #1e293b;
-      --bg-hover: #334155;
+      --bg: #0a0f1a;
+      --bg-card: #131b2e;
+      --bg-hover: #1e293b;
+      --bg-input: #0d1321;
       --accent: #3b82f6;
       --accent-hover: #2563eb;
-      --success: #22c55e;
+      --accent-glow: rgba(59, 130, 246, 0.3);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.3);
       --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.3);
       --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.3);
       --text: #f1f5f9;
-      --text-muted: #94a3b8;
+      --text-muted: #64748b;
+      --border: #1e293b;
+      --gradient-1: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      --gradient-2: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      line-height: 1.5;
     }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    
     .app { display: flex; min-height: 100vh; }
     
     /* Sidebar */
     .sidebar {
       width: 280px;
       background: var(--bg-card);
-      border-right: 1px solid #334155;
+      border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -38,98 +56,215 @@
       top: 0;
     }
     .logo {
-      padding: 20px;
+      padding: 24px 20px;
       font-size: 1.5rem;
-      font-weight: bold;
-      border-bottom: 1px solid #334155;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      background: var(--gradient-1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
     }
-    .logo span { color: var(--accent); }
     
     .server-list {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
+      padding: 12px;
+    }
+    .server-list-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      padding: 8px 12px;
+      margin-bottom: 4px;
     }
     .server-item {
-      padding: 12px 15px;
-      border-radius: 8px;
+      padding: 14px 16px;
+      border-radius: 10px;
       cursor: pointer;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
     }
-    .server-item:hover { background: var(--bg-hover); }
-    .server-item.active { background: var(--accent); }
+    .server-item:hover { 
+      background: var(--bg-hover); 
+      border-color: var(--border);
+      transform: translateX(4px);
+    }
+    .server-item.active { 
+      background: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .server-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .server-name {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .server-host {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .server-item.active .server-host { color: rgba(255,255,255,0.7); }
+    
     .server-status {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--text-muted);
+      flex-shrink: 0;
+      position: relative;
     }
-    .server-status.online { background: var(--success); }
-    .server-status.offline { background: var(--danger); }
-    .server-status.installed { background: var(--success); }
-    .server-status.unknown { background: var(--warning); }
+    .server-status.online, .server-status.installed { 
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success-glow);
+    }
+    .server-status.offline { 
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger-glow);
+    }
+    .server-status.unknown { 
+      background: var(--warning);
+      box-shadow: 0 0 8px var(--warning-glow);
+    }
     
     .add-server-btn {
-      margin: 10px;
-      padding: 12px;
-      background: var(--accent);
+      margin: 12px;
+      padding: 14px;
+      background: var(--gradient-1);
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 1rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow);
     }
-    .add-server-btn:hover { background: var(--accent-hover); }
+    .add-server-btn:hover { 
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg), 0 0 20px var(--accent-glow);
+    }
     
     /* Main Content */
     .main {
       flex: 1;
       display: flex;
       flex-direction: column;
+      background: var(--bg);
     }
     .header {
-      padding: 20px 30px;
-      border-bottom: 1px solid #334155;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: var(--bg-card);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    .header h1 { font-size: 1.5rem; }
+    .header h1 { 
+      font-size: 1.4rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
     
-    .content { padding: 30px; flex: 1; overflow-y: auto; }
+    .content { 
+      padding: 24px 32px; 
+      flex: 1; 
+      overflow-y: auto;
+    }
     
     /* Cards */
     .card {
       background: var(--bg-card);
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 20px;
       margin-bottom: 20px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
     }
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
     }
-    .card-title { font-size: 1.1rem; font-weight: 600; }
+    .card-title { 
+      font-size: 1rem; 
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     
     /* Stats Grid */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
     }
     .stat-card {
       background: var(--bg-card);
       padding: 20px;
-      border-radius: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
     }
-    .stat-value { font-size: 2rem; font-weight: bold; }
-    .stat-label { color: var(--text-muted); font-size: 0.9rem; }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gradient-1);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+    .stat-card:hover::before { opacity: 1; }
+    .stat-value { 
+      font-size: 1.8rem; 
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .stat-label { 
+      color: var(--text-muted); 
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
     
     /* Docker Table */
     .docker-table {
@@ -138,25 +273,127 @@
     }
     .docker-table th, .docker-table td {
       text-align: left;
-      padding: 12px;
-      border-bottom: 1px solid #334155;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border);
     }
-    .docker-table th { color: var(--text-muted); font-weight: 500; }
+    .docker-table th { 
+      color: var(--text-muted); 
+      font-weight: 500;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .docker-table tr {
+      transition: background 0.2s ease;
+    }
+    .docker-table tbody tr:hover {
+      background: var(--bg-hover);
+    }
     
     /* Buttons */
     .btn {
-      padding: 8px 16px;
+      padding: 10px 18px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 0.9rem;
-      margin-right: 5px;
+      font-weight: 500;
+      margin-right: 6px;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .btn-primary { background: var(--accent); color: white; }
-    .btn-success { background: var(--success); color: white; }
-    .btn-warning { background: var(--warning); color: black; }
-    .btn-danger { background: var(--danger); color: white; }
-    .btn:hover { opacity: 0.9; }
+    .btn-primary { 
+      background: var(--accent); 
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+    .btn-success { 
+      background: var(--success); 
+      color: white;
+    }
+    .btn-success:hover {
+      box-shadow: 0 0 15px var(--success-glow);
+    }
+    .btn-warning { 
+      background: var(--warning); 
+      color: black;
+    }
+    .btn-warning:hover {
+      box-shadow: 0 0 15px var(--warning-glow);
+    }
+    .btn-danger { 
+      background: var(--danger); 
+      color: white;
+    }
+    .btn-danger:hover {
+      box-shadow: 0 0 15px var(--danger-glow);
+    }
+    .btn-info {
+      background: #8b5cf6;
+      color: white;
+    }
+    .btn-info:hover {
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+    }
+    .btn:hover { 
+      transform: translateY(-2px);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+    .btn-icon {
+      padding: 8px;
+      min-width: 36px;
+      justify-content: center;
+    }
+    
+    /* Action Buttons Grid */
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .action-btn {
+      padding: 16px 20px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+    .action-btn:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+      transform: translateY(-2px);
+    }
+    .action-btn-icon {
+      font-size: 1.5rem;
+    }
+    .action-btn-text {
+      flex: 1;
+    }
+    .action-btn-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .action-btn-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
     
     /* Modal */
     .modal {
@@ -166,107 +403,303 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
       justify-content: center;
       align-items: center;
       z-index: 1000;
+      overflow: hidden;
     }
     .modal.active { display: flex; }
     .modal-content {
       background: var(--bg-card);
-      padding: 30px;
-      border-radius: 12px;
+      padding: 28px;
+      border-radius: 16px;
       width: 90%;
       max-width: 500px;
       max-height: 90vh;
       overflow-y: auto;
+      overflow-x: hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
     }
     .modal-title {
       font-size: 1.3rem;
+      font-weight: 600;
       margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .form-group { margin-bottom: 15px; }
+    .form-group { margin-bottom: 16px; }
     .form-group label {
       display: block;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
     }
-    .form-group input, .form-group textarea {
+    .form-group input, .form-group textarea, .form-group select {
       width: 100%;
-      padding: 10px;
-      background: var(--bg);
-      border: 1px solid #334155;
-      border-radius: 6px;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
       color: var(--text);
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
     }
-    .form-group input:focus, .form-group textarea:focus {
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
       outline: none;
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .form-group input::placeholder {
+      color: var(--text-muted);
     }
     .modal-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 20px;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
     }
     
     /* Output Log */
     .output-log {
-      background: #0a0a0a;
-      padding: 15px;
-      border-radius: 8px;
-      font-family: monospace;
+      background: #050810;
+      padding: 16px;
+      border-radius: 10px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 0.85rem;
-      max-height: 400px;
+      max-height: 350px;
       overflow-y: auto;
+      overflow-x: hidden;
       white-space: pre-wrap;
+      word-wrap: break-word;
+      word-break: break-all;
       color: #22c55e;
+      border: 1px solid var(--border);
+      line-height: 1.6;
     }
     
     /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
+      padding: 80px 20px;
       color: var(--text-muted);
     }
-    .empty-state h2 { margin-bottom: 10px; }
+    .empty-state-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state h2 { 
+      margin-bottom: 8px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .empty-state p {
+      max-width: 300px;
+      margin: 0 auto;
+    }
     
     /* Loading */
     .loading {
       display: inline-block;
       width: 20px;
       height: 20px;
-      border: 2px solid #fff;
-      border-top-color: transparent;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     
+    /* Progress Steps */
+    .progress-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--bg);
+      transition: all 0.3s ease;
+      opacity: 0.4;
+      border: 1px solid transparent;
+    }
+    .progress-step.active {
+      opacity: 1;
+      background: rgba(59, 130, 246, 0.1);
+      border-color: var(--accent);
+    }
+    .progress-step.active .step-icon {
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .progress-step.completed {
+      opacity: 1;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: var(--success);
+    }
+    .progress-step.error {
+      opacity: 1;
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--danger);
+    }
+    .step-icon {
+      font-size: 0.9rem;
+      min-width: 20px;
+      text-align: center;
+    }
+    .step-text {
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+    
+    /* Tooltip */
+    [data-tooltip] {
+      position: relative;
+    }
+    [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 6px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      z-index: 100;
+      margin-bottom: 6px;
+    }
+    
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .badge-info { background: rgba(59, 130, 246, 0.2); color: var(--accent); }
+    
     .footer {
-      padding: 15px;
-      border-top: 1px solid #334155;
+      padding: 16px;
+      border-top: 1px solid var(--border);
       font-size: 0.8rem;
       text-align: center;
       background: var(--bg-card);
     }
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    .footer a:hover { color: var(--text); }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; height: auto; position: relative; }
+      .app { flex-direction: column; }
+      .content { padding: 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .action-grid { grid-template-columns: 1fr; }
+    }
+    
+    /* Compact Action Buttons */
+    .action-btn-compact {
+      padding: 10px 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .action-btn-compact:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+      transform: translateY(-1px);
+    }
+    .action-btn-compact.danger {
+      border-color: rgba(239, 68, 68, 0.3);
+      color: var(--danger);
+    }
+    .action-btn-compact.danger:hover {
+      border-color: var(--danger);
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .action-btn-compact.muted {
+      border-color: var(--border);
+      color: var(--text-muted);
+    }
+    .action-btn-compact.muted:hover {
+      border-color: var(--text-muted);
+    }
+    
+    /* Mini Buttons for containers */
+    .btn-mini {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      background: var(--bg-hover);
+      color: var(--text);
+      transition: all 0.2s ease;
+    }
+    .btn-mini:hover {
+      transform: scale(1.1);
+    }
+    .btn-mini.success { background: var(--success); color: white; }
+    .btn-mini.warning { background: var(--warning); color: black; }
+    .btn-mini.danger { background: var(--danger); color: white; }
   </style>
 </head>
 <body>
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="logo">Novus<span>Mesh</span></div>
+      <div class="logo">🌐 NovusGate</div>
+      <div class="server-list-title">Servers</div>
       <div class="server-list" id="serverList">
         <!-- Server items rendered here -->
       </div>
       <button class="add-server-btn" onclick="showAddServerModal()">+ New Server</button>
       
       <div class="footer">
-        <p>Developed by <a href="https://github.com/Ali7Zeynalli" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 500;">Ali Zeynalli</a></p>
+        <p>Developed by <a href="https://github.com/Ali7Zeynalli" target="_blank">Ali Zeynalli</a></p>
         <div style="margin-top: 8px; display: flex; gap: 12px; justify-content: center;">
-          <a href="https://github.com/Ali7Zeynalli" target="_blank" style="color: var(--text-muted); text-decoration: none;">GitHub</a>
-          <a href="https://www.linkedin.com/in/ali7zeynalli/" target="_blank" style="color: var(--text-muted); text-decoration: none;">LinkedIn</a>
+          <a href="https://github.com/Ali7Zeynalli" target="_blank">GitHub</a>
+          <a href="https://www.linkedin.com/in/ali7zeynalli/" target="_blank">LinkedIn</a>
         </div>
       </div>
     </aside>
@@ -275,13 +708,14 @@
     <main class="main">
       <header class="header">
         <h1 id="serverTitle">Select Server</h1>
-        <div>
+        <div class="header-actions">
           <button class="btn btn-primary" onclick="refreshStatus()" id="refreshBtn" style="display:none">↻ Refresh</button>
         </div>
       </header>
       
       <div class="content" id="mainContent">
         <div class="empty-state">
+          <div class="empty-state-icon">🖥️</div>
           <h2>No Server Selected</h2>
           <p>Select a server from the left or add a new one</p>
         </div>
@@ -292,19 +726,19 @@
   <!-- Add Server Modal -->
   <div class="modal" id="addServerModal">
     <div class="modal-content">
-      <h2 class="modal-title">Add New Server</h2>
+      <h2 class="modal-title">🖥️ Add New Server</h2>
       <form id="addServerForm">
         <div class="form-group">
-          <label>Name</label>
-          <input type="text" id="serverName" required placeholder="Production Server">
+          <label>Server Name</label>
+          <input type="text" id="serverName" required placeholder="e.g. Production Server">
         </div>
         <div class="form-group">
-          <label>Host (IP)</label>
-          <input type="text" id="serverHost" required placeholder="192.168.1.100">
+          <label>Host (IP Address)</label>
+          <input type="text" id="serverHost" required placeholder="e.g. 192.168.1.100">
         </div>
         <div class="form-group">
-          <label>Port</label>
-          <input type="number" id="serverPort" value="22">
+          <label>SSH Port</label>
+          <input type="number" id="serverPort" value="22" placeholder="22">
         </div>
         <div class="form-group">
           <label>Username</label>
@@ -316,116 +750,178 @@
         </div>
         <div class="modal-actions">
           <button type="button" class="btn" onclick="closeModal('addServerModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add</button>
+          <button type="submit" class="btn btn-primary">Add Server</button>
         </div>
       </form>
     </div>
   </div>
     <!-- Config Modal -->
     <div id="configModal" class="modal">
-      <div class="modal-content">
-        <h2 id="configTitle">⚙️ Installation Configuration</h2>
-        <p style="color: var(--text-muted); margin-bottom: 20px;">Customize your NovusMesh deployment.</p>
+      <div class="modal-content" style="max-width: 700px;">
+        <h2 id="configTitle" style="margin-bottom: 8px;">⚙️ Installation Configuration</h2>
+        <p style="color: var(--text-muted); margin-bottom: 16px; font-size: 0.9rem;">Customize your NovusGate deployment.</p>
         
         <form id="installConfigForm" onsubmit="event.preventDefault(); confirmInstall();">
-          <!-- Admin User -->
-          <div class="form-group">
-            <label>Admin Username</label>
-            <input type="text" id="confAdminUser" value="admin" required>
+          <!-- Admin Settings Row -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 0.85rem;">👤 Admin Username</label>
+              <input type="text" id="confAdminUser" value="admin" required style="padding: 10px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 0.85rem;">🔑 Admin Password <small>(auto if empty)</small></label>
+              <input type="text" id="confAdminPass" placeholder="Auto-generate" style="padding: 10px;">
+            </div>
           </div>
           
-          <!-- Admin Pass -->
-          <div class="form-group">
-            <label>Admin Password <small>(Leave empty to auto-generate)</small></label>
-            <input type="text" id="confAdminPass" placeholder="Auto-generate secure password">
-          </div>
-          
-          <div style="border-top: 1px solid #333; margin: 15px 0;"></div>
-          
-          <!-- Admin Network IP -->
-          <div class="form-group">
-            <label>Admin Network Gateway IP</label>
-            <input type="text" id="confVpnIp" value="10.99.0.1" required placeholder="e.g. 10.99.0.1">
-            <small style="color: var(--text-muted)">The internal IP for the Admin Panel (wg0)</small>
+          <!-- VPN IP Row -->
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label style="font-size: 0.85rem;">🌐 Admin VPN Gateway IP <small style="color: var(--text-muted);">(wg0 interface)</small></label>
+            <input type="text" id="confVpnIp" value="10.99.0.1" required placeholder="e.g. 10.99.0.1" style="padding: 10px;">
           </div>
 
-          <div style="border-top: 1px solid #333; margin: 15px 0;"></div>
+          <div style="border-top: 1px solid var(--border); margin: 12px 0;"></div>
 
-          <!-- Database Config -->
-          <h4 style="color: var(--accent); margin-bottom: 10px;">🗄️ Database Settings</h4>
+          <!-- Database Settings Header -->
+          <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; color: var(--accent);">🗄️ Database Settings</div>
           
-          <div class="form-group">
-            <label>Database Name</label>
-            <input type="text" id="confDbName" value="novusmesh" required>
+          <!-- Database Row 1 -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 0.85rem;">Database Name</label>
+              <input type="text" id="confDbName" value="NovusGate" required style="padding: 10px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 0.85rem;">Database User</label>
+              <input type="text" id="confDbUser" value="NovusGate" required style="padding: 10px;">
+            </div>
           </div>
           
-          <div class="form-group">
-            <label>Database User</label>
-            <input type="text" id="confDbUser" value="novusmesh" required>
-          </div>
-          
-          <div class="form-group">
-            <label>Database Password <small>(Leave empty to auto-generate)</small></label>
-            <input type="text" id="confDbPass" placeholder="Auto-generate secure password">
+          <!-- Database Password -->
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="font-size: 0.85rem;">🔐 Database Password <small>(auto if empty)</small></label>
+            <input type="text" id="confDbPass" placeholder="Auto-generate secure password" style="padding: 10px;">
           </div>
 
-          <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+          <div class="modal-actions" style="margin-top: 12px; padding-top: 12px;">
+            <button type="button" class="btn" onclick="closeConfigModal()">Cancel</button>
             <button type="submit" class="btn btn-primary">Start Installation 🚀</button>
           </div>
         </form>
       </div>
     </div>
   
+  <!-- Credentials Modal -->
+  <div class="modal" id="credentialsModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <h2 class="modal-title" style="margin-bottom: 16px;">🔑 Server Credentials</h2>
+      <div id="credentialsContent">
+        <div style="text-align: center; padding: 20px;">
+          <div class="loading"></div>
+          <p style="margin-top: 10px; color: var(--text-muted);">Loading credentials...</p>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 16px; padding-top: 12px;">
+        <button class="btn btn-primary" onclick="closeModal('credentialsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+  
   <!-- Output Modal -->
   <div class="modal" id="outputModal">
-    <div class="modal-content" style="max-width: 800px;">
-      <h2 class="modal-title" id="outputTitle">Output</h2>
+    <div class="modal-content" style="max-width: 1000px; padding: 20px; overflow: hidden; display: flex; flex-direction: column; max-height: 85vh;">
+      <h2 class="modal-title" id="outputTitle" style="margin-bottom: 16px; flex-shrink: 0;">Output</h2>
       
-      <!-- New Credentials Section -->
-      <div id="installCredentials" style="display: none; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid var(--accent);">
-        <h3 style="color: var(--accent); margin-bottom: 10px;">🔑 Security Keys</h3>
-        <div style="display: grid; gap: 10px; font-family: monospace;">
-          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px;">
-            <span style="color: var(--text-muted)">Admin User:</span>
-            <span id="credUser" style="color: white">admin</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px;">
-            <span style="color: var(--text-muted)">Admin Pass:</span>
-            <span id="credPass" style="color: var(--success); font-weight: bold;">-</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px;">
-            <span style="color: var(--text-muted)">API Key:</span>
-            <span id="credApiKey" style="color: var(--warning)">-</span>
-          </div>
-
-          <div style="border-top: 1px solid #333; margin: 5px 0;"></div>
-          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px;">
-            <span style="color: var(--text-muted)">DB Password:</span>
-            <span id="credDbPass" style="color: #a855f7">-</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 5px;">
-            <span style="color: var(--text-muted)">JWT Secret:</span>
-            <span id="credJwt" style="color: #a855f7">-</span>
-          </div>
-
+      <!-- Side by Side Layout: Log Left, Progress Right -->
+      <div style="display: grid; grid-template-columns: 1fr 320px; gap: 16px; flex: 1; overflow: hidden; min-height: 0;">
+        
+        <!-- Left: Output Log -->
+        <div style="min-width: 0; overflow: hidden; display: flex; flex-direction: column;">
+          <div class="output-log" id="outputLog" style="flex: 1; max-height: none; overflow-y: auto;"></div>
         </div>
-        <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); text-align: center;">Copy and save these credentials.</div>
-      </div>
+        
+        <!-- Right: Progress & Credentials -->
+        <div style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto;">
+          
+          <!-- Progress Steps -->
+          <div id="installProgress" style="display: none; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 10px;">📊 Progress</div>
+            <div class="progress-steps">
+              <div class="progress-step" id="step-connect">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Connecting</span>
+              </div>
+              <div class="progress-step" id="step-upload">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Uploading</span>
+              </div>
+              <div class="progress-step" id="step-docker">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Docker</span>
+              </div>
+              <div class="progress-step" id="step-extract">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Extracting</span>
+              </div>
+              <div class="progress-step" id="step-vpn">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">VPN Setup</span>
+              </div>
+              <div class="progress-step" id="step-services">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Services</span>
+              </div>
+              <div class="progress-step" id="step-complete">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Complete</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Credentials Section -->
+          <div id="installCredentials" style="display: none; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid var(--accent);">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 10px; color: var(--accent);">🔑 Credentials</div>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-family: monospace; font-size: 0.8rem;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted)">User:</span>
+                <span id="credUser" style="color: white">admin</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted)">Pass:</span>
+                <span id="credPass" style="color: var(--success); font-weight: bold;">-</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted)">API Key:</span>
+                <span id="credApiKey" style="color: var(--warning); font-size: 0.7rem;">-</span>
+              </div>
+              <div style="border-top: 1px solid #333; margin: 4px 0;"></div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted)">DB Pass:</span>
+                <span id="credDbPass" style="color: #a855f7; font-size: 0.7rem;">-</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted)">JWT:</span>
+                <span id="credJwt" style="color: #a855f7; font-size: 0.65rem;">-</span>
+              </div>
+            </div>
+            <div style="margin-top: 8px; font-size: 0.7rem; color: var(--text-muted); text-align: center;">Save these credentials!</div>
+          </div>
 
-      <!-- VPN Config Section -->
-      <div id="vpnConfigSection" style="display: none; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid var(--accent);">
-        <h3 style="color: var(--accent); margin-bottom: 10px;">🔒 Admin VPN Configuration</h3>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
-          You <strong>MUST</strong> connect to this VPN to access the Admin Panel.
-        </p>
-        <textarea id="vpnConfigText" style="display:none;"></textarea>
-        <button class="btn btn-success" onclick="downloadVpnConfig()" style="width: 100%;">📥 Download admin-vpn.conf</button>
+          <!-- VPN Config Section -->
+          <div id="vpnConfigSection" style="display: none; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid var(--accent);">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--accent);">🔒 Admin VPN</div>
+            <p style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 10px;">
+              Connect to VPN to access Admin Panel
+            </p>
+            <textarea id="vpnConfigText" style="display:none;"></textarea>
+            <button class="btn btn-success btn-sm" onclick="downloadVpnConfig()" style="width: 100%;">📥 Download Config</button>
+          </div>
+          
+        </div>
       </div>
-
-      <div class="output-log" id="outputLog"></div>
-      <div class="modal-actions">
-        <button class="btn btn-warning" onclick="downloadReport()" id="btnDownloadReport" style="display:none; margin-right: auto;">📥 Download Report</button>
+      
+      <div class="modal-actions" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-shrink: 0;">
+        <button class="btn btn-warning btn-sm" onclick="downloadReport()" id="btnDownloadReport" style="display:none; margin-right: auto;">📥 Report</button>
         <button class="btn btn-primary" onclick="closeModal('outputModal')">Close</button>
       </div>
     </div>
@@ -435,6 +931,64 @@
 
   <script>
     // ... existing variables ...
+    
+    // Helper function to calculate memory percentage
+    function calculateMemPercent(used, total) {
+      if (!used || !total) return 0;
+      // Parse values like "1.5Gi" or "512Mi"
+      const parseSize = (str) => {
+        const match = str.match(/^([\d.]+)([KMGT]i?)?$/i);
+        if (!match) return 0;
+        const num = parseFloat(match[1]);
+        const unit = (match[2] || '').toUpperCase();
+        const multipliers = { '': 1, 'K': 1024, 'KI': 1024, 'M': 1024*1024, 'MI': 1024*1024, 'G': 1024*1024*1024, 'GI': 1024*1024*1024, 'T': 1024*1024*1024*1024, 'TI': 1024*1024*1024*1024 };
+        return num * (multipliers[unit] || 1);
+      };
+      const usedBytes = parseSize(used);
+      const totalBytes = parseSize(total);
+      if (totalBytes === 0) return 0;
+      return Math.round((usedBytes / totalBytes) * 100);
+    }
+    
+    // Helper function to get action icon
+    function getActionIcon(action) {
+      const icons = {
+        'install': '📦',
+        'reinstall': '🔄',
+        'update': '🚀',
+        'uninstall': '🗑️',
+        'docker_start': '▶️',
+        'docker_stop': '⏹️',
+        'docker_restart': '🔄',
+        'docker_remove': '🗑️',
+        'docker_logs': '📋',
+        'prune_all': '🧹',
+        'prune_images': '📀',
+        'prune_volumes': '💾',
+        'join-vpn': '🔐'
+      };
+      return icons[action] || '📌';
+    }
+    
+    // Helper function to get action name
+    function getActionName(action) {
+      const names = {
+        'install': 'Installation',
+        'reinstall': 'Reinstallation',
+        'update': 'Update',
+        'uninstall': 'Uninstall',
+        'docker_start': 'Container started',
+        'docker_stop': 'Container stopped',
+        'docker_restart': 'Container restarted',
+        'docker_remove': 'Container removed',
+        'docker_logs': 'Logs viewed',
+        'prune_all': 'Full cleanup',
+        'prune_images': 'Image cleanup',
+        'prune_volumes': 'Volume cleanup',
+        'join-vpn': 'VPN joined'
+      };
+      return names[action] || action;
+    }
     
     // START: Report Generation Logic
     function downloadReport() {
@@ -451,7 +1005,7 @@
 <!DOCTYPE html>
 <html>
 <head>
- <title>NovusMesh Install Report</title>
+ <title>NovusGate Install Report</title>
  <style>
    body { font-family: monospace; background: #0f172a; color: #f1f5f9; padding: 20px; }
    .header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
@@ -462,7 +1016,7 @@
 </head>
 <body>
  <div class="header">
-   <h1>NovusMesh Installation Report</h1>
+   <h1>NovusGate Installation Report</h1>
    <div class="meta">Date: ${timestamp}</div>
    <div class="meta">Status: <span class="status">${status}</span></div>
    <div class="meta">Server: ${selectedServer ? selectedServer.host : 'Unknown'}</div>
@@ -480,7 +1034,7 @@
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `novusmesh-report-${Date.now()}.html`;
+      a.download = `NovusGate-report-${Date.now()}.html`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -505,16 +1059,16 @@
     function renderServerList() {
       const list = document.getElementById('serverList');
       if (servers.length === 0) {
-        list.innerHTML = '<div style="padding: 20px; color: var(--text-muted); text-align: center;">No Servers</div>';
+        list.innerHTML = '<div style="padding: 30px 20px; color: var(--text-muted); text-align: center;"><div style="font-size: 2rem; margin-bottom: 8px;">📡</div>No servers</div>';
         return;
       }
       
       list.innerHTML = servers.map(s => `
         <div class="server-item ${selectedServer?.id === s.id ? 'active' : ''}" onclick="selectServer('${s.id}')">
           <div class="server-status ${s.status || 'unknown'}"></div>
-          <div>
-            <div>${s.name}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted)">${s.host}</div>
+          <div class="server-info">
+            <div class="server-name">${s.name}</div>
+            <div class="server-host">${s.host}</div>
           </div>
         </div>
       `).join('');
@@ -531,7 +1085,7 @@
     async function refreshStatus() {
       if (!selectedServer) return;
       
-      document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="loading"></div><p>Loading...</p></div>';
+      document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="loading"></div><p style="margin-top: 12px;">Loading...</p></div>';
       
       try {
         const res = await fetch(`/api/servers/${selectedServer.id}/status`);
@@ -562,119 +1116,188 @@
       
       const content = document.getElementById('mainContent');
       content.innerHTML = `
-        <!-- Stats -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value" style="color: ${status.isInstalled ? 'var(--success)' : 'var(--warning)'}">
-              ${status.isInstalled ? '✓' : '✗'}
+        <!-- Top Section: Stats Left, Actions Right -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+          <!-- Left: Stats & Resources -->
+          <div>
+            <!-- Compact Stats -->
+            <div class="card" style="margin-bottom: 12px;">
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                  <span style="font-size: 1.5rem; color: ${status.isInstalled ? 'var(--success)' : 'var(--warning)'}">
+                    ${status.isInstalled ? '✓' : '✗'}
+                  </span>
+                  <div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Status</div>
+                    <div style="font-weight: 600; font-size: 0.9rem;">${status.isInstalled ? 'Installed' : 'Not Installed'}</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                  <span style="font-size: 1.5rem;">🐳</span>
+                  <div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Containers</div>
+                    <div style="font-weight: 600; font-size: 0.9rem;">${containers.length}</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                  <span style="font-size: 1.5rem;">⚡</span>
+                  <div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">CPU</div>
+                    <div style="font-weight: 600; font-size: 0.9rem;">${status.cpuUsage || '0'}%</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg); border-radius: 8px;">
+                  <span style="font-size: 1.5rem;">⏱️</span>
+                  <div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Uptime</div>
+                    <div style="font-weight: 600; font-size: 0.85rem;">${status.uptime || 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="stat-label">${status.isInstalled ? 'Installed' : 'Not installed'}</div>
+            
+            <!-- Compact Resources -->
+            <div class="card">
+              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">📊 Resources</div>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Disk -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.8rem;">
+                    <span style="color: var(--text-muted);">💾 Disk</span>
+                    <span>${status.usedDisk || 'N/A'} / ${status.totalDisk || 'N/A'}</span>
+                  </div>
+                  <div style="background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden;">
+                    <div style="background: ${parseInt(status.diskPercent) > 80 ? 'var(--danger)' : 'var(--accent)'}; height: 100%; width: ${status.diskPercent || '0%'};"></div>
+                  </div>
+                </div>
+                <!-- Memory -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.8rem;">
+                    <span style="color: var(--text-muted);">🧠 RAM</span>
+                    <span>${status.usedMemory || 'N/A'} / ${status.totalMemory || 'N/A'}</span>
+                  </div>
+                  <div style="background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden;">
+                    <div style="background: var(--success); height: 100%; width: ${calculateMemPercent(status.usedMemory, status.totalMemory)}%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-value">${containers.length}</div>
-            <div class="stat-label">Docker Containers</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${status.freeSpace || 'N/A'}</div>
-            <div class="stat-label">Free Disk</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${status.freeMemory || 'N/A'}</div>
-            <div class="stat-label">Free RAM</div>
+          
+          <!-- Right: Compact Actions -->
+          <div class="card">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">⚡ Actions</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <button class="action-btn-compact" onclick="installServer('local')">
+                <span>📦</span> Install
+              </button>
+              <button class="action-btn-compact" onclick="updateServer()">
+                <span>🚀</span> Update
+              </button>
+              <button class="action-btn-compact" onclick="migrateServer()">
+                <span>🗄️</span> Migrate
+              </button>
+              <button class="action-btn-compact" onclick="reinstallServer()">
+                <span>🔄</span> Reinstall
+              </button>
+              <button class="action-btn-compact danger" onclick="uninstallNovusGate()">
+                <span>🗑️</span> Uninstall
+              </button>
+              <button class="action-btn-compact" onclick="showCredentials()" style="border-color: var(--accent);">
+                <span>🔑</span> Credentials
+              </button>
+              <button class="action-btn-compact muted" onclick="deleteServer()">
+                <span>❌</span> Remove
+              </button>
+            </div>
           </div>
         </div>
         
-        <!-- Actions -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Actions</span>
-          </div>
-          <button class="btn btn-success" onclick="installServer('local')">📦 Install NovusMesh Server</button>
-          <button class="btn btn-primary" onclick="updateServer()">🚀 Update (Smart)</button>
-          <button class="btn btn-info" onclick="migrateServer()" style="background: #8b5cf6">🗄️ Database Migration Only</button>
-          <button class="btn btn-warning" onclick="reinstallServer()">🔄 Reinstall</button>
-          <button class="btn btn-danger" onclick="uninstallNovusMesh()">🗑️ Uninstall NovusMesh</button>
-          <button class="btn" onclick="deleteServer()" style="background: #333">❌ Delete Server</button>
-        </div>
-        
-        <!-- Docker Containers -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Docker Containers</span>
-            <div>
-              <button class="btn btn-danger" onclick="bulkContainerAction('remove')" id="bulkRemoveContainers" style="display:none">🗑️ Delete Selected</button>
-              <button class="btn btn-warning" onclick="bulkContainerAction('stop')" id="bulkStopContainers" style="display:none">⏹ Stop</button>
-              <button class="btn btn-primary" onclick="refreshStatus()">↻</button>
+        <!-- Middle Section: Docker & Fail2ban Side by Side -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+          <!-- Docker Containers -->
+          <div class="card">
+            <div class="card-header" style="padding-bottom: 8px; margin-bottom: 10px;">
+              <span class="card-title" style="font-size: 0.9rem;">🐳 Containers</span>
+              <button class="btn btn-primary btn-icon btn-sm" onclick="refreshStatus()">↻</button>
             </div>
-          </div>
-          ${containers.length ? `
-            <table class="docker-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" onchange="toggleAllContainers(this)"></th>
-                  <th>Name</th><th>Status</th><th>Image</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            ${containers.length ? `
+              <div style="max-height: 220px; overflow-y: auto;">
                 ${containers.map(c => `
-                  <tr>
-                    <td><input type="checkbox" class="container-checkbox" value="${c.name}" onchange="updateBulkButtons()"></td>
-                    <td>${c.name}</td>
-                    <td style="color: ${c.status?.includes('Up') ? 'var(--success)' : 'var(--danger)'}">${c.status}</td>
-                    <td style="color: var(--text-muted)">${c.image}</td>
-                    <td>
-                      <button class="btn btn-success" onclick="dockerAction('${c.name}', 'start')">▶</button>
-                      <button class="btn btn-warning" onclick="dockerAction('${c.name}', 'stop')">⏹</button>
-                      <button class="btn btn-primary" onclick="dockerAction('${c.name}', 'restart')">🔄</button>
-                      <button class="btn" onclick="dockerAction('${c.name}', 'logs')">📋</button>
-                      <button class="btn btn-danger" onclick="dockerAction('${c.name}', 'remove')">🗑️</button>
-                    </td>
-                  </tr>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--bg); border-radius: 6px; margin-bottom: 6px;">
+                    <div style="min-width: 0; flex: 1;">
+                      <div style="font-size: 0.85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${c.name.replace('NovusGate-', '')}</div>
+                      <div style="font-size: 0.7rem; color: ${c.status?.includes('Up') ? 'var(--success)' : 'var(--danger)'};">${c.status}</div>
+                    </div>
+                    <div style="display: flex; gap: 3px; flex-shrink: 0;">
+                      <button class="btn-mini success" onclick="dockerAction('${c.name}', 'start')" title="Start">▶</button>
+                      <button class="btn-mini warning" onclick="dockerAction('${c.name}', 'stop')" title="Stop">⏹</button>
+                      <button class="btn-mini" onclick="dockerAction('${c.name}', 'restart')" title="Restart" style="background: var(--accent); color: white;">�</button>
+                      <button class="btn-mini" onclick="dockerAction('${c.name}', 'logs')" title="Logs">📋</button>
+                      <button class="btn-mini danger" onclick="dockerAction('${c.name}', 'remove')" title="Remove">🗑️</button>
+                    </div>
+                  </div>
                 `).join('')}
-              </tbody>
-            </table>
-          ` : '<p style="color: var(--text-muted)">No Docker containers found</p>'}
+              </div>
+            ` : '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">No containers</p>'}
+          </div>
+          
+          <!-- Fail2ban -->
+          <div class="card">
+            <div class="card-header" style="padding-bottom: 8px; margin-bottom: 10px;">
+              <span class="card-title" style="font-size: 0.9rem;">🛡️ Fail2ban</span>
+              <button class="btn btn-primary btn-icon btn-sm" onclick="loadFail2ban()">↻</button>
+            </div>
+            <div id="fail2banContainer" style="max-height: 200px; overflow-y: auto;"><p style="color: var(--text-muted); font-size: 0.85rem;">Loading...</p></div>
+          </div>
         </div>
         
-        <!-- Docker Images -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Docker Images</span>
-            <button class="btn" onclick="loadImages()">↻</button>
+        <!-- Bottom Section: Images, Volumes, History -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+          <!-- Docker Images -->
+          <div class="card">
+            <div class="card-header" style="padding-bottom: 8px; margin-bottom: 10px;">
+              <span class="card-title" style="font-size: 0.9rem;">📀 Images</span>
+              <button class="btn btn-primary btn-icon btn-sm" onclick="loadImages()">↻</button>
+            </div>
+            <div id="imagesContainer" style="max-height: 180px; overflow-y: auto;"><p style="color: var(--text-muted); font-size: 0.85rem;">Loading...</p></div>
           </div>
-          <div id="imagesContainer"><p style="color: var(--text-muted)">Loading...</p></div>
-        </div>
-        
-        <!-- Docker Volumes -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Docker Volumes</span>
-            <button class="btn" onclick="loadVolumes()">↻</button>
+          
+          <!-- Docker Volumes -->
+          <div class="card">
+            <div class="card-header" style="padding-bottom: 8px; margin-bottom: 10px;">
+              <span class="card-title" style="font-size: 0.9rem;">💾 Volumes</span>
+              <button class="btn btn-primary btn-icon btn-sm" onclick="loadVolumes()">↻</button>
+            </div>
+            <div id="volumesContainer" style="max-height: 180px; overflow-y: auto;"><p style="color: var(--text-muted); font-size: 0.85rem;">Loading...</p></div>
           </div>
-          <div id="volumesContainer"><p style="color: var(--text-muted)">Loading...</p></div>
-        </div>
-        
-        <!-- History -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">History</span>
+          
+          <!-- History -->
+          <div class="card">
+            <div class="card-header" style="padding-bottom: 8px; margin-bottom: 10px;">
+              <span class="card-title" style="font-size: 0.9rem;">📜 History</span>
+            </div>
+            <div style="max-height: 180px; overflow-y: auto;">
+              ${selectedServer.history?.length ? `
+                ${selectedServer.history.slice(0, 5).map(h => `
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; border-bottom: 1px solid var(--border); font-size: 0.8rem;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span>${getActionIcon(h.action)}</span>
+                      <span>${getActionName(h.action)}</span>
+                    </div>
+                    <span class="badge ${h.success ? 'badge-success' : 'badge-danger'}" style="font-size: 0.65rem; padding: 2px 6px;">${h.success ? '✓' : '✗'}</span>
+                  </div>
+                `).join('')}
+              ` : '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">No history</p>'}
+            </div>
           </div>
-          ${selectedServer.history?.length ? `
-            <ul style="list-style: none;">
-              ${selectedServer.history.slice(0, 10).map(h => `
-                <li style="padding: 8px 0; border-bottom: 1px solid #334155; display: flex; justify-content: space-between;">
-                  <span>${h.action} ${h.container || ''}</span>
-                  <span style="color: var(--text-muted)">${new Date(h.timestamp).toLocaleString()}</span>
-                </li>
-              `).join('')}
-            </ul>
-          ` : '<p style="color: var(--text-muted)">No History</p>'}
         </div>
       `;
       
-      // Load images and volumes
+      // Load images, volumes and fail2ban
       loadImages();
       loadVolumes();
+      loadFail2ban();
     }
     
     
@@ -760,8 +1383,11 @@
                 outputElement.textContent += data.text;
                 outputElement.scrollTop = outputElement.scrollHeight;
                 
-                // Parse credentials
+                // Update progress steps based on output
                 const text = data.text;
+                updateProgressFromOutput(text);
+                
+                // Parse credentials
                 if (text.includes('ADMIN PASS:')) {
                    const match = text.match(/ADMIN PASS:\s+([^\n]+)/);
                    if (match) document.getElementById('credPass').textContent = match[1].trim();
@@ -797,8 +1423,15 @@
                      capturingVpnConfig = false;
                      
                      // Show download button
-                     document.getElementById('vpnConfigText').value = vpnConfigBuffer.trim();
+                     const vpnConfigTrimmed = vpnConfigBuffer.trim();
+                     document.getElementById('vpnConfigText').value = vpnConfigTrimmed;
                      document.getElementById('vpnConfigSection').style.display = 'block';
+                     
+                     // Save VPN config to localStorage
+                     if (selectedServer && vpnConfigTrimmed) {
+                       localStorage.setItem(`NovusGate_vpn_${selectedServer.id}`, vpnConfigTrimmed);
+                       console.log('VPN config saved to localStorage for server:', selectedServer.id);
+                     }
                   } else {
                      vpnConfigBuffer += content;
                   }
@@ -808,27 +1441,64 @@
                 // Final scan of the entire output for credentials to ensure nothing was missed due to chunking
                 const fullText = outputElement.textContent;
                 
+                // Parse and save credentials to localStorage
+                const serverCreds = {};
+                
                 if (fullText.includes('ADMIN PASS:')) {
                    const match = fullText.match(/ADMIN PASS:\s+([^\n]+)/);
                    if (match) {
+                     serverCreds.adminPass = match[1].trim();
                      document.getElementById('credPass').textContent = match[1].trim();
-                     document.getElementById('installCredentials').style.display = 'block';
                    }
                 }
                 if (fullText.includes('API_KEY:')) {
                    const match = fullText.match(/API_KEY:\s+([^\n]+)/);
-                   if (match) document.getElementById('credApiKey').textContent = match[1].trim();
+                   if (match) {
+                     serverCreds.apiKey = match[1].trim();
+                     document.getElementById('credApiKey').textContent = match[1].trim();
+                   }
+                }
+                if (fullText.includes('DB_PASSWORD:')) {
+                   const match = fullText.match(/DB_PASSWORD:\s+([^\n]+)/);
+                   if (match) {
+                     serverCreds.dbPass = match[1].trim();
+                     document.getElementById('credDbPass').textContent = match[1].trim();
+                   }
+                }
+                if (fullText.includes('JWT_SECRET:')) {
+                   const match = fullText.match(/JWT_SECRET:\s+([^\n]+)/);
+                   if (match) {
+                     serverCreds.jwtSecret = match[1].trim();
+                     document.getElementById('credJwt').textContent = match[1].trim();
+                   }
+                }
+                
+                // Save credentials to localStorage
+                if (selectedServer && Object.keys(serverCreds).length > 0) {
+                  serverCreds.adminUser = currentInstallParams?.adminUsername || 'admin';
+                  serverCreds.vpnIp = currentInstallParams?.vpnIp || '10.99.0.1';
+                  serverCreds.dbName = currentInstallParams?.dbName || 'NovusGate';
+                  serverCreds.dbUser = currentInstallParams?.dbUser || 'NovusGate';
+                  serverCreds.savedAt = new Date().toISOString();
+                  
+                  localStorage.setItem(`NovusGate_creds_${selectedServer.id}`, JSON.stringify(serverCreds));
+                  console.log('Credentials saved to localStorage for server:', selectedServer.id);
                 }
                 
                 outputLog.textContent += '\n\n[DONE] ' + (data.success ? 'Completed successfully.' : 'Error occurred.');
                 outputLog.scrollTop = outputLog.scrollHeight;
                 isProcessRunning = false;
                 
+                // Hide progress, show credentials on success
+                if (data.success) {
+                   document.getElementById('installProgress').style.display = 'none';
+                   document.getElementById('installCredentials').style.display = 'block';
+                }
+                
                 // Show Report Button
                 document.getElementById('btnDownloadReport').style.display = 'inline-block';
                 if (data.success) {
                    loadServers(); // Refresh server status
-                   alert('Installation complete! You can access the Admin Dashboard.');
                 }
                 return;
               }
@@ -925,7 +1595,16 @@
       else if (reinstall) title.textContent = 'Reinstalling...';
       else title.textContent = 'Installing...';
       
-      output.textContent = 'Starting...\n';
+      output.textContent = '';
+      
+      // Show/hide progress based on install type
+      const progressEl = document.getElementById('installProgress');
+      if (!migrateOnly && !update) {
+        progressEl.style.display = 'block';
+        resetProgressSteps();
+      } else {
+        progressEl.style.display = 'none';
+      }
       
       // Reset credentials display
       document.getElementById('installCredentials').style.display = 'none';
@@ -984,7 +1663,7 @@
       await fetch(`/api/servers/${selectedServer.id}`, { method: 'DELETE' });
       selectedServer = null;
       await loadServers();
-      document.getElementById('mainContent').innerHTML = '<div class="empty-state"><h2>No Server Selected</h2></div>';
+      document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🖥️</div><h2>No Server Selected</h2></div>';
       document.getElementById('serverTitle').textContent = 'Select Server';
       document.getElementById('refreshBtn').style.display = 'none';
     }
@@ -1048,37 +1727,31 @@
         const images = await res.json();
         
         if (images.length === 0) {
-          container.innerHTML = '<p style="color: var(--text-muted)">No Images</p>';
+          container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">No images</p>';
           return;
         }
         
-        container.innerHTML = `
-          <div style="margin-bottom: 10px;">
-            <button class="btn btn-danger" onclick="bulkDeleteImages()" id="bulkDeleteImages" style="display:none">🗑️ Delete Selected</button>
-            <button class="btn btn-warning" onclick="pruneImages()">🧹 Prune Dangling Images</button>
-          </div>
-          <table class="docker-table">
-            <thead><tr>
-              <th><input type="checkbox" onchange="toggleAllImages(this)"></th>
-              <th>ID</th><th>Repository</th><th>Tag</th><th>Size</th><th>Created</th><th></th>
-            </tr></thead>
-            <tbody>
-              ${images.map(i => {
-                const deleteId = i.repository === '<none>' ? i.id : `${i.repository}:${i.tag}`;
-                return `
-                <tr>
-                  <td><input type="checkbox" class="image-checkbox" value="${deleteId}" onchange="updateBulkButtons()"></td>
-                  <td style="color: var(--text-muted); font-family: monospace; font-size: 0.8rem">${i.id}</td>
-                  <td>${i.repository}</td>
-                  <td>${i.tag}</td>
-                  <td>${i.size}</td>
-                  <td style="color: var(--text-muted)">${i.created}</td>
-                  <td><button class="btn btn-danger" onclick="deleteImage('${deleteId}')">🗑️</button></td>
-                </tr>
-              `}).join('')}
-            </tbody>
-          </table>
-        `;
+        let imagesHtml = '<div style="margin-bottom: 8px;"><button class="btn-mini warning" onclick="pruneImages()" style="padding: 4px 8px; font-size: 0.7rem;">🧹 Prune</button></div>';
+        
+        images.slice(0, 5).forEach(i => {
+          const deleteId = i.repository === '<none>' ? i.id : `${i.repository}:${i.tag}`;
+          const displayName = i.repository === '<none>' ? i.id.slice(0,12) : i.repository;
+          imagesHtml += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: var(--bg); border-radius: 4px; margin-bottom: 4px; font-size: 0.8rem;">
+              <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+                <span style="color: var(--text);">${displayName}</span>
+                <span style="color: var(--text-muted); font-size: 0.7rem;"> ${i.size}</span>
+              </div>
+              <button class="btn-mini danger" onclick="deleteImage('${deleteId}')" style="margin-left: 4px;">🗑️</button>
+            </div>
+          `;
+        });
+        
+        if (images.length > 5) {
+          imagesHtml += `<p style="color: var(--text-muted); font-size: 0.75rem; text-align: center;">+${images.length - 5} more</p>`;
+        }
+        
+        container.innerHTML = imagesHtml;
       } catch (err) {
         container.innerHTML = `<p style="color: var(--danger)">Error: ${err.message}</p>`;
       }
@@ -1106,30 +1779,21 @@
         const volumes = await res.json();
         
         if (volumes.length === 0) {
-          container.innerHTML = '<p style="color: var(--text-muted)">No Volumes</p>';
+          container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">No volumes</p>';
           return;
         }
         
         container.innerHTML = `
-          <div style="margin-bottom: 10px;">
-            <button class="btn btn-danger" onclick="bulkDeleteVolumes()" id="bulkDeleteVolumes" style="display:none">🗑️ Delete Selected</button>
-          </div>
-          <table class="docker-table">
-            <thead><tr>
-              <th><input type="checkbox" onchange="toggleAllVolumes(this)"></th>
-              <th>Name</th><th>Driver</th><th></th>
-            </tr></thead>
-            <tbody>
-              ${volumes.map(v => `
-                <tr>
-                  <td><input type="checkbox" class="volume-checkbox" value="${v.name}" onchange="updateBulkButtons()"></td>
-                  <td>${v.name}</td>
-                  <td style="color: var(--text-muted)">${v.driver}</td>
-                  <td><button class="btn btn-danger" onclick="deleteVolume('${v.name}')">🗑️</button></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          ${volumes.slice(0, 5).map(v => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px; background: var(--bg); border-radius: 4px; margin-bottom: 4px; font-size: 0.8rem;">
+              <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+                <span style="color: var(--text);">${v.name}</span>
+                <span style="color: var(--text-muted); font-size: 0.7rem;"> ${v.driver}</span>
+              </div>
+              <button class="btn-mini danger" onclick="deleteVolume('${v.name}')" style="margin-left: 4px;">🗑️</button>
+            </div>
+          `).join('')}
+          ${volumes.length > 5 ? `<p style="color: var(--text-muted); font-size: 0.75rem; text-align: center;">+${volumes.length - 5} more</p>` : ''}
         `;
       } catch (err) {
         container.innerHTML = `<p style="color: var(--danger)">Error: ${err.message}</p>`;
@@ -1148,11 +1812,222 @@
       }
     }
     
-    // Uninstall NovusMesh completely
-    async function uninstallNovusMesh() {
-      if (!confirm('NovusMesh will be COMPLETELY REMOVED (containers, images, volumes, files). Continue?')) return;
+    // Load Fail2ban Status
+    async function loadFail2ban() {
+      const container = document.getElementById('fail2banContainer');
+      if (!container) return;
       
-      document.getElementById('outputTitle').textContent = 'Uninstalling NovusMesh';
+      try {
+        const res = await fetch(`/api/servers/${selectedServer.id}/fail2ban`);
+        const data = await res.json();
+        
+        if (!data.installed) {
+          container.innerHTML = '<p style="color: var(--warning); font-size: 0.85rem;">⚠️ Not installed</p>';
+          return;
+        }
+        
+        if (!data.running) {
+          container.innerHTML = '<p style="color: var(--danger); font-size: 0.85rem;">❌ Not running</p>';
+          return;
+        }
+        
+        // Build compact status HTML
+        let html = `
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <div style="flex: 1; background: var(--bg); padding: 8px; border-radius: 6px; text-align: center;">
+              <div style="font-size: 1rem; color: var(--success);">✓</div>
+              <div style="font-size: 0.7rem; color: var(--text-muted);">Active</div>
+            </div>
+            <div style="flex: 1; background: var(--bg); padding: 8px; border-radius: 6px; text-align: center;">
+              <div style="font-size: 1rem; color: var(--danger);">${data.totalBanned}</div>
+              <div style="font-size: 0.7rem; color: var(--text-muted);">Banned</div>
+            </div>
+            <div style="flex: 1; background: var(--bg); padding: 8px; border-radius: 6px; text-align: center;">
+              <div style="font-size: 1rem; color: var(--accent);">${data.jails.length}</div>
+              <div style="font-size: 0.7rem; color: var(--text-muted);">Jails</div>
+            </div>
+          </div>
+        `;
+        
+        // Banned IPs compact list
+        if (data.bannedIPs && data.bannedIPs.length > 0) {
+          for (const jail of data.bannedIPs) {
+            if (jail.ips.length > 0) {
+              html += `
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">🔒 ${jail.jail}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">
+                  ${jail.ips.slice(0, 4).map(ip => `
+                    <span style="background: #7f1d1d; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; display: inline-flex; align-items: center; gap: 4px;">
+                      ${ip}
+                      <button onclick="unbanIP('${jail.jail}', '${ip}')" style="background: none; border: none; color: var(--success); cursor: pointer; padding: 0; font-size: 0.75rem;">✓</button>
+                    </span>
+                  `).join('')}
+                  ${jail.ips.length > 4 ? `<span style="font-size: 0.7rem; color: var(--text-muted);">+${jail.ips.length - 4}</span>` : ''}
+                </div>
+              `;
+            }
+          }
+        }
+        
+        container.innerHTML = html;
+        
+      } catch (err) {
+        container.innerHTML = `<p style="color: var(--danger); font-size: 0.85rem;">Error</p>`;
+      }
+    }
+    
+    // Unban IP address
+    async function unbanIP(jail, ip) {
+      if (!confirm(`Do you want to unban "${ip}"?`)) return;
+      
+      try {
+        const res = await fetch(`/api/servers/${selectedServer.id}/fail2ban/unban`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jail, ip })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('IP unbanned!');
+          loadFail2ban();
+        } else {
+          alert('Error: ' + (data.message || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Show server credentials from server's .env file
+    async function showCredentials() {
+      if (!selectedServer) return alert('Please select a server first');
+      
+      document.getElementById('credentialsModal').classList.add('active');
+      document.getElementById('credentialsContent').innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <div class="loading"></div>
+          <p style="margin-top: 10px; color: var(--text-muted);">Loading credentials from server...</p>
+        </div>
+      `;
+      
+      try {
+        // Fetch credentials from server
+        const credsRes = await fetch(`/api/servers/${selectedServer.id}/credentials`);
+        
+        if (!credsRes.ok) {
+          const err = await credsRes.json();
+          throw new Error(err.error || 'Failed to load credentials');
+        }
+        
+        const creds = await credsRes.json();
+        
+        // Try to fetch VPN config
+        let vpnSection = '';
+        try {
+          const vpnRes = await fetch(`/api/servers/${selectedServer.id}/vpn-config`);
+          if (vpnRes.ok) {
+            const vpnData = await vpnRes.json();
+            if (vpnData.config) {
+              // Store temporarily for download
+              window._tempVpnConfig = vpnData.config;
+              vpnSection = `
+                <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--success); margin-top: 12px;">
+                  <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 10px; color: var(--success);">🔒 Admin VPN Config</div>
+                  <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px;">Connect to VPN to access Admin Panel</p>
+                  <button class="btn btn-success btn-sm" onclick="downloadServerVpnConfig()" style="width: 100%;">📥 Download admin-vpn.conf</button>
+                </div>
+              `;
+            }
+          }
+        } catch (vpnErr) {
+          console.log('VPN config not available:', vpnErr.message);
+        }
+        
+        document.getElementById('credentialsContent').innerHTML = `
+          <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; color: var(--accent);">👤 Admin Access</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-family: monospace; font-size: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">Username:</span>
+                <span style="color: var(--text);">${creds.adminUser || 'admin'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">Password:</span>
+                <span style="color: var(--success); font-weight: bold;">${creds.adminPass || '-'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">API Key:</span>
+                <span style="color: var(--warning); font-size: 0.7rem; word-break: break-all;">${creds.apiKey || '-'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">VPN IP:</span>
+                <span style="color: var(--accent);">${creds.vpnIp || '-'}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-top: 12px;">
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; color: #a855f7;">🗄️ Database</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-family: monospace; font-size: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">DB Name:</span>
+                <span style="color: var(--text);">${creds.dbName || '-'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">DB User:</span>
+                <span style="color: var(--text);">${creds.dbUser || '-'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">DB Password:</span>
+                <span style="color: #a855f7; font-size: 0.75rem;">${creds.dbPass || '-'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg); border-radius: 4px;">
+                <span style="color: var(--text-muted);">JWT Secret:</span>
+                <span style="color: #a855f7; font-size: 0.6rem; word-break: break-all;">${creds.jwtSecret || '-'}</span>
+              </div>
+            </div>
+          </div>
+          
+          ${vpnSection}
+          
+          <div style="margin-top: 12px; text-align: center; font-size: 0.75rem; color: var(--text-muted);">
+            📋 Data loaded from server's .env file
+          </div>
+        `;
+        
+      } catch (err) {
+        document.getElementById('credentialsContent').innerHTML = `
+          <div style="text-align: center; padding: 30px; color: var(--danger);">
+            <div style="font-size: 2.5rem; margin-bottom: 12px;">❌</div>
+            <p style="font-size: 0.95rem; margin-bottom: 8px;">${err.message}</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Make sure NovusGate is installed on this server.</p>
+          </div>
+        `;
+      }
+    }
+    
+    // Download VPN config from server
+    function downloadServerVpnConfig() {
+      if (!window._tempVpnConfig) return alert('No VPN config available');
+      
+      const blob = new Blob([window._tempVpnConfig], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'admin-vpn.conf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+    
+    
+    // Uninstall NovusGate completely
+    async function uninstallNovusGate() {
+      if (!confirm('NovusGate will be COMPLETELY REMOVED (containers, images, volumes, files). Continue?')) return;
+      
+      document.getElementById('outputTitle').textContent = 'Uninstalling NovusGate';
       document.getElementById('outputLog').textContent = 'Starting...';
       document.getElementById('outputModal').classList.add('active');
       
@@ -1254,6 +2129,121 @@
         loadImages();
       } catch (err) {
         document.getElementById('outputLog').textContent = 'Error: ' + err.message;
+      }
+    }
+    
+    // Progress Step Functions
+    function resetProgressSteps() {
+      const steps = ['connect', 'upload', 'docker', 'extract', 'vpn', 'services', 'complete'];
+      steps.forEach(step => {
+        const el = document.getElementById('step-' + step);
+        if (el) {
+          el.classList.remove('active', 'completed', 'error');
+          el.querySelector('.step-icon').textContent = '⏳';
+        }
+      });
+    }
+    
+    function setStepActive(stepId) {
+      const el = document.getElementById('step-' + stepId);
+      if (el) {
+        el.classList.remove('completed', 'error');
+        el.classList.add('active');
+        el.querySelector('.step-icon').textContent = '🔄';
+      }
+    }
+    
+    function setStepCompleted(stepId) {
+      const el = document.getElementById('step-' + stepId);
+      if (el) {
+        el.classList.remove('active', 'error');
+        el.classList.add('completed');
+        el.querySelector('.step-icon').textContent = '✅';
+      }
+    }
+    
+    function setStepError(stepId) {
+      const el = document.getElementById('step-' + stepId);
+      if (el) {
+        el.classList.remove('active', 'completed');
+        el.classList.add('error');
+        el.querySelector('.step-icon').textContent = '❌';
+      }
+    }
+    
+    function updateProgressFromOutput(text) {
+      const lowerText = text.toLowerCase();
+      
+      // Step 1: Connect
+      if (text.includes('Connecting to server') || text.includes('[INFO] Connected')) {
+        setStepActive('connect');
+      }
+      if (text.includes('[INFO] Connected!') || text.includes('Connected successfully')) {
+        setStepCompleted('connect');
+        setStepActive('upload');
+      }
+      
+      // Step 2: Upload
+      if (text.includes('Uploading archive') || text.includes('Upload complete')) {
+        setStepActive('upload');
+      }
+      if (text.includes('Upload complete')) {
+        setStepCompleted('upload');
+        setStepActive('docker');
+      }
+      
+      // Step 3: Docker
+      if (text.includes('Installing Docker') || text.includes('Docker already installed')) {
+        setStepActive('docker');
+      }
+      if (text.includes('Docker already installed') || text.includes('Docker Compose already installed')) {
+        setStepCompleted('docker');
+        setStepActive('extract');
+      }
+      
+      // Step 4: Extract
+      if (text.includes('Extracting archive') || text.includes('Generating security')) {
+        setStepActive('extract');
+      }
+      if (text.includes('Generating security keys') || text.includes('Detecting Server IP')) {
+        setStepCompleted('extract');
+        setStepActive('vpn');
+      }
+      
+      // Step 5: VPN
+      if (text.includes('Configuring Admin VPN') || text.includes('Admin VPN configured')) {
+        setStepActive('vpn');
+      }
+      if (text.includes('Admin VPN configured')) {
+        setStepCompleted('vpn');
+        setStepActive('services');
+      }
+      
+      // Step 6: Services
+      if (text.includes('Starting services') || text.includes('docker-compose')) {
+        setStepActive('services');
+      }
+      if (text.includes('Waiting') || text.includes('seconds')) {
+        setStepCompleted('services');
+        setStepActive('complete');
+      }
+      
+      // Step 7: Complete
+      if (text.includes('INSTALLATION COMPLETE') || text.includes('Installation complete')) {
+        setStepCompleted('complete');
+      }
+      
+      // Error handling
+      if (text.includes('[ERROR]') || text.includes('Error:')) {
+        // Find active step and mark as error
+        const steps = ['connect', 'upload', 'docker', 'extract', 'vpn', 'services', 'complete'];
+        for (const step of steps) {
+          const el = document.getElementById('step-' + step);
+          if (el && el.classList.contains('active')) {
+            setStepError(step);
+            break;
+          }
+        }
       }
     }
     

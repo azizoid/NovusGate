@@ -1,8 +1,8 @@
-# NovusMesh Web Dashboard - Developer Təlimatı
+# NovusGate Web Dashboard - Developer Təlimatı
 
 ## İcmal
 
-NovusMesh Web Dashboard, WireGuard mesh VPN şəbəkələrini idarə etmək üçün müasir, responsiv React tətbiqidir. Node idarəçiliyi, şəbəkə monitorinqi və istifadəçi administrasiyası üçün vizual interfeys təqdim edir.
+NovusGate Web Dashboard, WireGuard mesh VPN şəbəkələrini idarə etmək üçün müasir, responsiv React tətbiqidir. Node idarəçiliyi, şəbəkə monitorinqi və istifadəçi administrasiyası üçün vizual interfeys təqdim edir.
 
 ## Texnologiya Yığını
 
@@ -247,7 +247,7 @@ RUN mkdir -p /etc/nginx/ssl && \
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -keyout /etc/nginx/ssl/key.pem \
     -out /etc/nginx/ssl/cert.pem \
-    -subj "/C=AZ/ST=Baku/L=Baku/O=NovusMesh/CN=novusmesh.local"
+    -subj "/C=AZ/ST=Baku/L=Baku/O=NovusGate/CN=NovusGate.local"
 
 EXPOSE 3007
 CMD ["nginx", "-g", "daemon off;"]

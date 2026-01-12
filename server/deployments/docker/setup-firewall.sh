@@ -2,7 +2,7 @@
 set -e
 
 # setup-firewall.sh
-# Configures iptables to secure NovusMesh admin access via VPN
+# Configures iptables to secure NovusGate admin access via VPN
 
 echo "[FIREWALL] Configuring iptables rules..."
 
@@ -39,7 +39,7 @@ iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 
 # 6. Allow WireGuard Range
-iptables -A INPUT -p udp --dport 51820:51900 -j ACCEPT  # wg0-wg80 (NovusMesh Range)
+iptables -A INPUT -p udp --dport 51820:51900 -j ACCEPT  # wg0-wg80 (NovusGate Range)
 
 # 7. Allow Admin Services ONLY from wg0 (Admin Network)
 iptables -A INPUT -i wg0 -p tcp --dport 3007 -j ACCEPT   # Web Dashboard
@@ -71,10 +71,10 @@ systemctl restart docker
 # Wait for Docker to be ready
 sleep 5
 
-# Restart NovusMesh containers (only if .env exists)
-echo "[FIREWALL] Restarting NovusMesh containers..."
-if [ -f "/opt/novusmesh/server/deployments/docker/.env" ]; then
-  cd /opt/novusmesh
+# Restart NovusGate containers (only if .env exists)
+echo "[FIREWALL] Restarting NovusGate containers..."
+if [ -f "/opt/NovusGate/server/deployments/docker/.env" ]; then
+  cd /opt/NovusGate
   docker-compose -f server/deployments/docker/docker-compose.yml up -d
 else
   echo "[FIREWALL] Warning: .env not found, skipping container restart"

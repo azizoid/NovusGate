@@ -3,7 +3,7 @@ version: '3.8'
 services:
   installer:
     build: .
-    container_name: novusmesh-installer
+    container_name: novusgate-installer
     ports:
       - "${PORT:-3017}:${PORT:-3017}"
     volumes:

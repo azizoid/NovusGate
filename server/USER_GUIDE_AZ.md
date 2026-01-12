@@ -1,12 +1,12 @@
-# NovusMesh Server - İstifadəçi Təlimatı
+# NovusGate Server - İstifadəçi Təlimatı
 
 ## Giriş
 
-**NovusMesh Server**, VPN şəbəkənizin onurğa sütunudur. Arxa planda səssizcə işləyərək cihazlarınız arasındakı təhlükəsiz şifrələnmiş tunelləri idarə edir.
+**NovusGate Server**, VPN şəbəkənizin onurğa sütunudur. Arxa planda səssizcə işləyərək cihazlarınız arasındakı təhlükəsiz şifrələnmiş tunelləri idarə edir.
 
 ## Quraşdırma
 
-*Qeyd: Avtomatik yerləşdirmə üçün **NovusMesh Installer** istifadə etməyiniz tövsiyə olunur.*
+*Qeyd: Avtomatik yerləşdirmə üçün **NovusGate Installer** istifadə etməyiniz tövsiyə olunur.*
 
 ### Docker Yerləşdirməsi (Manual)
 
@@ -19,8 +19,8 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: novusmesh
-      POSTGRES_USER: novusmesh
+      POSTGRES_DB: NovusGate
+      POSTGRES_USER: NovusGate
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
@@ -43,8 +43,8 @@ services:
 2. **`.env` konfiqurasiyası yaradın:**
 ```bash
 # Verilənlər Bazası
-DB_NAME=novusmesh
-DB_USER=novusmesh
+DB_NAME=NovusGate
+DB_USER=NovusGate
 DB_PASSWORD=guclu_parol_123
 
 # Təhlükəsizlik
@@ -71,13 +71,13 @@ docker-compose up -d
 |---------|--------|---------|
 | `DATABASE_URL` | PostgreSQL bağlantı string-i | Məcburi |
 | `JWT_SECRET` | API tokenlərini imzalamaq üçün gizli açar | Məcburi |
-| `novusmesh_API_KEY` | Xidmətlərarası əlaqə üçün açar | Məcburi |
+| `NovusGate_API_KEY` | Xidmətlərarası əlaqə üçün açar | Məcburi |
 | `ADMIN_USERNAME` | İlk admin istifadəçi adı | `admin` |
 | `ADMIN_PASSWORD` | İlk admin parolu | Məcburi |
 | `WG_SERVER_ENDPOINT` | Müştərilərin qoşulacağı İctimai IP | Məcburi |
 | `ADMIN_CIDR` | Admin şəbəkə CIDR aralığı | `10.99.0.0/24` |
-| `novusmesh_LISTEN` | API dinləmə portu | `:8080` |
-| `novusmesh_GRPC_LISTEN` | gRPC dinləmə portu | `:8443` |
+| `NovusGate_LISTEN` | API dinləmə portu | `:8080` |
+| `NovusGate_GRPC_LISTEN` | gRPC dinləmə portu | `:8443` |
 
 ### Məlumatların Saxlanması
 
@@ -87,11 +87,11 @@ docker-compose up -d
 
 ## Şəbəkə Strukturu
 
-NovusMesh çoxlu VPN şəbəkələrini dəstəkləyir:
+NovusGate çoxlu VPN şəbəkələrini dəstəkləyir:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    NovusMesh Server                         │
+│                    NovusGate Server                         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐  ┌─────────────────┐                  │
@@ -187,7 +187,7 @@ Server iki üsulla online statusu müəyyən edir:
 - `wg show` əmri ilə interfeys statusunu yoxlayın
 
 ### "Server restart loop-da"
-- Logları yoxlayın: `docker logs novusmesh-control-plane`
+- Logları yoxlayın: `docker logs NovusGate-control-plane`
 - Ən çox rast gəlinən səbəblər:
   - PostgreSQL bağlantı xətası
   - `/etc/wireguard` qovluğuna giriş yoxdur
@@ -214,7 +214,7 @@ Server iki üsulla online statusu müəyyən edir:
 docker-compose logs -f
 
 # Yalnız control-plane
-docker logs -f novusmesh-control-plane
+docker logs -f NovusGate-control-plane
 
 # WireGuard statusu
 wg show

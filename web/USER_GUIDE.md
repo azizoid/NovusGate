@@ -1,8 +1,8 @@
-# NovusMesh Web Dashboard - User Guide
+# NovusGate Web Dashboard - User Guide
 
 ## Introduction
 
-The NovusMesh Web Dashboard is your visual command center for managing the WireGuard VPN network. It allows you to add devices, monitor connections, download configurations, and manage user access from any browser.
+The NovusGate Web Dashboard is your visual command center for managing the WireGuard VPN network. It allows you to add devices, monitor connections, download configurations, and manage user access from any browser.
 
 ## Getting Started
 
@@ -25,10 +25,10 @@ After installation, the dashboard is available at:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  🔷 NovusMesh                              [Dark Mode] [👤] │
+│  🔷 NovusGate                              [Dark Mode] [👤] │
 ├─────────────┬───────────────────────────────────────────────┤
 │             │                                               │
-│  📊 Dashboard│   Welcome to NovusMesh                       │
+│  📊 Dashboard│   Welcome to NovusGate                       │
 │  🖥️ Nodes    │                                               │
 │  🌐 Networks │   ┌─────────┐ ┌─────────┐ ┌─────────┐        │
 │  ⚙️ Settings │   │ Total   │ │ Online  │ │ Offline │        │

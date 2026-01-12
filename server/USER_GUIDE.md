@@ -1,12 +1,12 @@
-# NovusMesh Server - User Guide
+# NovusGate Server - User Guide
 
 ## Introduction
 
-**NovusMesh Server** is the backbone of your VPN network. It runs quietly in the background, maintaining secure encrypted tunnels between your devices.
+**NovusGate Server** is the backbone of your VPN network. It runs quietly in the background, maintaining secure encrypted tunnels between your devices.
 
 ## Installation
 
-*Note: We highly recommend using the **NovusMesh Installer** for automatic deployment.*
+*Note: We highly recommend using the **NovusGate Installer** for automatic deployment.*
 
 ### Docker Deployment (Manual)
 
@@ -17,8 +17,8 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: novusmesh
-      POSTGRES_USER: novusmesh
+      POSTGRES_DB: NovusGate
+      POSTGRES_USER: NovusGate
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
@@ -41,8 +41,8 @@ services:
 2. **Create `.env` configuration:**
 ```bash
 # Database
-DB_NAME=novusmesh
-DB_USER=novusmesh
+DB_NAME=NovusGate
+DB_USER=NovusGate
 DB_PASSWORD=strong_password_123
 
 # Security
@@ -69,12 +69,12 @@ docker-compose up -d
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Required |
 | `JWT_SECRET` | Secret key for signing API tokens | Required |
-| `novusmesh_API_KEY` | Key for inter-service communication | Required |
+| `NovusGate_API_KEY` | Key for inter-service communication | Required |
 | `ADMIN_USERNAME` | Initial admin username | `admin` |
 | `ADMIN_PASSWORD` | Initial admin password | Required |
 | `WG_SERVER_ENDPOINT` | Public IP where clients connect | Required |
 | `ADMIN_CIDR` | Admin network CIDR range | `10.99.0.0/24` |
-| `novusmesh_LISTEN` | API listening port | `:8080` |
+| `NovusGate_LISTEN` | API listening port | `:8080` |
 
 ### Data Storage
 
@@ -84,11 +84,11 @@ docker-compose up -d
 
 ## Network Structure
 
-NovusMesh supports multiple VPN networks:
+NovusGate supports multiple VPN networks:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    NovusMesh Server                         │
+│                    NovusGate Server                         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐  ┌─────────────────┐                  │
@@ -177,7 +177,7 @@ Server determines online status using two methods:
 - Check interface status with `wg show`
 
 ### "Server restart loop"
-- Check logs: `docker logs novusmesh-control-plane`
+- Check logs: `docker logs NovusGate-control-plane`
 - Common causes:
   - PostgreSQL connection error
   - No access to `/etc/wireguard` directory
@@ -200,7 +200,7 @@ Server determines online status using two methods:
 docker-compose logs -f
 
 # Control-plane only
-docker logs -f novusmesh-control-plane
+docker logs -f NovusGate-control-plane
 
 # WireGuard status
 wg show

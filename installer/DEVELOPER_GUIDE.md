@@ -1,8 +1,8 @@
-# NovusMesh Installer - Developer Guide
+# NovusGate Installer - Developer Guide
 
 ## Overview
 
-The **NovusMesh Installer** is a web-based management tool for deploying, updating, and maintaining NovusMesh VPN servers on remote Linux machines via SSH. It provides a centralized control panel that runs locally (via Docker) and connects to target servers to perform operations.
+The **NovusGate Installer** is a web-based management tool for deploying, updating, and maintaining NovusGate VPN servers on remote Linux machines via SSH. It provides a centralized control panel that runs locally (via Docker) and connects to target servers to perform operations.
 
 ## Architecture
 
@@ -45,7 +45,7 @@ installer/
 #### Installation Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/servers/:id/install` | Install/Update/Reinstall NovusMesh |
+| `POST` | `/api/servers/:id/install` | Install/Update/Reinstall NovusGate |
 | `POST` | `/api/servers/:id/uninstall` | Complete removal |
 | `POST` | `/api/servers/:id/command` | Execute custom SSH command |
 
@@ -83,7 +83,7 @@ All installation logic is embedded as template literals in `server.js`:
          │
          ▼
 ┌─────────────────┐
-│ Create Archive  │  tar -czf novusmesh.tar.gz server/ web/
+│ Create Archive  │  tar -czf NovusGate.tar.gz server/ web/
 │ (local files)   │
 └────────┬────────┘
          │
@@ -94,7 +94,7 @@ All installation logic is embedded as template literals in `server.js`:
          │
          ▼
 ┌─────────────────┐
-│ Upload Archive  │  SFTP to /tmp/novusmesh.tar.gz
+│ Upload Archive  │  SFTP to /tmp/NovusGate.tar.gz
 └────────┬────────┘
          │
          ▼
@@ -211,8 +211,8 @@ source.onmessage = (e) => {
 | `adminUsername` | `admin` | Dashboard admin username |
 | `adminPassword` | auto-generated | Dashboard admin password |
 | `vpnIp` | `10.99.0.1` | Admin VPN gateway IP |
-| `dbName` | `novusmesh` | PostgreSQL database name |
-| `dbUser` | `novusmesh` | PostgreSQL username |
+| `dbName` | `NovusGate` | PostgreSQL database name |
+| `dbUser` | `NovusGate` | PostgreSQL username |
 | `dbPassword` | auto-generated | PostgreSQL password |
 
 ## Development

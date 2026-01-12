@@ -1,8 +1,8 @@
-# NovusMesh Installer - İstifadəçi Təlimatı
+# NovusGate Installer - İstifadəçi Təlimatı
 
 ## Giriş
 
-NovusMesh Installer, NovusMesh VPN serverlərinin yerləşdirilməsi və idarə edilməsi üçün veb əsaslı idarəetmə panelidir. Sadə bir paneldən VPN infrastrukturunuzu quraşdıra, yeniləyə və izləyə bilərsiniz.
+NovusGate Installer, NovusGate VPN serverlərinin yerləşdirilməsi və idarə edilməsi üçün veb əsaslı idarəetmə panelidir. Sadə bir paneldən VPN infrastrukturunuzu quraşdıra, yeniləyə və izləyə bilərsiniz.
 
 ## Sürətli Başlanğıc
 
@@ -34,7 +34,7 @@ Panelə giriş: `http://localhost:3017`
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  NovusMesh                                                  │
+│  NovusGate                                                  │
 ├─────────────┬───────────────────────────────────────────────┤
 │             │                                               │
 │  SERVERLƏR  │   Server Paneli                               │
@@ -48,9 +48,9 @@ Panelə giriş: `http://localhost:3017`
 │             │                                               │
 │             │   Docker Konteynerləri                        │
 │             │   ┌─────────────────────────────────────┐    │
-│             │   │ novusmesh-control-plane  İşləyir    │    │
-│             │   │ novusmesh-web            İşləyir    │    │
-│             │   │ novusmesh-postgres       İşləyir    │    │
+│             │   │ NovusGate-control-plane  İşləyir    │    │
+│             │   │ NovusGate-web            İşləyir    │    │
+│             │   │ NovusGate-postgres       İşləyir    │    │
 │             │   └─────────────────────────────────────┘    │
 └─────────────┴───────────────────────────────────────────────┘
 ```
@@ -71,7 +71,7 @@ Panelə giriş: `http://localhost:3017`
 ### Təmiz Quraşdırma
 
 1. Sol menyudan serverinizi seçin
-2. **📦 NovusMesh Server Quraşdır** düyməsinə klikləyin
+2. **📦 NovusGate Server Quraşdır** düyməsinə klikləyin
 3. Quraşdırma seçimlərini konfiqurasiya edin:
 
 | Seçim | Default | Təsvir |
@@ -79,8 +79,8 @@ Panelə giriş: `http://localhost:3017`
 | Admin İstifadəçi Adı | `admin` | Panel giriş istifadəçi adı |
 | Admin Parolu | avtomatik | Boş buraxsanız avtomatik yaradılır |
 | Admin Şəbəkə IP | `10.99.0.1` | Admin girişi üçün VPN gateway IP |
-| Verilənlər Bazası Adı | `novusmesh` | PostgreSQL verilənlər bazası |
-| Verilənlər Bazası İstifadəçisi | `novusmesh` | PostgreSQL istifadəçi adı |
+| Verilənlər Bazası Adı | `NovusGate` | PostgreSQL verilənlər bazası |
+| Verilənlər Bazası İstifadəçisi | `NovusGate` | PostgreSQL istifadəçi adı |
 | Verilənlər Bazası Parolu | avtomatik | Boş buraxsanız avtomatik yaradılır |
 
 4. **Quraşdırmanı Başlat 🚀** düyməsinə klikləyin
@@ -220,7 +220,7 @@ Fayllara və ya konteynerlərə toxunmadan verilənlər bazası miqrasiyaların�
 Əgər installer qoşula bilmirsə, manual SSH ilə daxil olun:
 ```bash
 ssh root@server-ip-unvani
-cd /opt/novusmesh
+cd /opt/NovusGate
 docker-compose -f server/deployments/docker/docker-compose.yml logs -f
 ```
 

@@ -10,6 +10,7 @@ import {
   ChevronDown,
   LogOut,
   Activity,
+  Shield,
 } from 'lucide-react';
 import { useAppStore, useSidebarOpen } from '../store';
 import { useNetworks } from '../api/client';
@@ -25,6 +26,7 @@ const navigation: NavItem[] = [
   { name: 'Overview', href: '/dashboard', icon: <Activity className="w-5 h-5" /> },
   { name: 'Networks', href: '/networks', icon: <Network className="w-5 h-5" /> },
   { name: 'Nodes', href: '/nodes', icon: <Server className="w-5 h-5" /> },
+  { name: 'Fail2Ban', href: '/fail2ban', icon: <Shield className="w-5 h-5" /> },
   { name: 'Settings', href: '/settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
@@ -66,7 +68,7 @@ export const Layout: React.FC = () => {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Network className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">NovusMesh</span>
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">NovusGate</span>
           </Link>
           <button onClick={toggleSidebar} className="lg:hidden text-gray-500">
             <X className="w-5 h-5" />
@@ -143,7 +145,7 @@ export const Layout: React.FC = () => {
         {/* Version */}
         <div className="px-4 pb-4">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            NovusMesh v0.1.0
+            NovusGate v0.1.0
           </p>
         </div>
       </aside>

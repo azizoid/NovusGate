@@ -13,23 +13,23 @@ RUN go mod download
 COPY . .
 
 # Build control plane binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o novusmesh-server ./cmd/control-plane
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o novusgate-server ./cmd/control-plane
 
 # Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates curl wireguard-tools iptables
+RUN apk add --no-cache ca-certificates curl wireguard-tools iptables util-linux
 
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/novusmesh-server .
+COPY --from=builder /app/novusgate-server .
 
 # Create non-root user (Commented out: WireGuard config is root-read-only)
-# RUN adduser -D -g '' novusmesh
-# USER novusmesh
+# RUN adduser -D -g '' novusgate
+# USER novusgate
 
 EXPOSE 8080 8443
 
-ENTRYPOINT ["./novusmesh-server"]
+ENTRYPOINT ["./novusgate-server"]
 CMD ["serve"]

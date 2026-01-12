@@ -1,4 +1,4 @@
--- NovusMesh Initial Schema (Hub-and-Spoke VPN)
+-- NovusGate Initial Schema (Hub-and-Spoke VPN)
 -- Migration: 001_initial.sql
 
 -- Enable UUID extension

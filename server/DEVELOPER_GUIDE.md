@@ -1,8 +1,8 @@
-# NovusMesh Server - Developer Guide
+# NovusGate Server - Developer Guide
 
 ## Overview
 
-**NovusMesh Server** is the core component responsible for managing the WireGuard mesh network overlay. It handles peer coordination, configuration distribution, key management, and API access for the dashboard. Written in **Go**, it's designed to be high-performance and cloud-native.
+**NovusGate Server** is the core component responsible for managing the WireGuard mesh network overlay. It handles peer coordination, configuration distribution, key management, and API access for the dashboard. Written in **Go**, it's designed to be high-performance and cloud-native.
 
 ## Architecture
 
@@ -183,16 +183,16 @@ Server provides CLI via `cobra` library:
 
 ```bash
 # Start server
-novusmesh-server serve --listen :8080 --grpc-listen :8443
+NovusGate-server serve --listen :8080 --grpc-listen :8443
 
 # Database migration
-novusmesh-server migrate --database "postgres://..."
+NovusGate-server migrate --database "postgres://..."
 
 # Network initialization
-novusmesh-server init --name "Admin Network" --cidr "10.99.0.0/24"
+NovusGate-server init --name "Admin Network" --cidr "10.99.0.0/24"
 
 # Version
-novusmesh-server version
+NovusGate-server version
 ```
 
 ## Middlewares
@@ -219,10 +219,10 @@ Request logging (currently placeholder).
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Required |
-| `novusmesh_LISTEN` | HTTP API port | `:8080` |
-| `novusmesh_GRPC_LISTEN` | gRPC port | `:8443` |
+| `NovusGate_LISTEN` | HTTP API port | `:8080` |
+| `NovusGate_GRPC_LISTEN` | gRPC port | `:8443` |
 | `JWT_SECRET` | Token signing key | Required |
-| `novusmesh_API_KEY` | API key | Required |
+| `NovusGate_API_KEY` | API key | Required |
 | `ADMIN_USERNAME` | Initial admin username | `admin` |
 | `ADMIN_PASSWORD` | Initial admin password | Required |
 | `WG_SERVER_ENDPOINT` | Server public IP | Required |
@@ -266,9 +266,9 @@ cd server
 go mod download
 
 # Set environment variables
-export DATABASE_URL="postgres://novusmesh:password@localhost:5432/novusmesh?sslmode=disable"
+export DATABASE_URL="postgres://NovusGate:password@localhost:5432/NovusGate?sslmode=disable"
 export JWT_SECRET="dev_secret"
-export novusmesh_API_KEY="dev_key"
+export NovusGate_API_KEY="dev_key"
 export ADMIN_PASSWORD="admin123"
 
 # Run
@@ -278,10 +278,10 @@ go run ./cmd/control-plane serve
 ### Build
 ```bash
 # Binary build
-go build -o novusmesh-server ./cmd/control-plane
+go build -o NovusGate-server ./cmd/control-plane
 
 # Docker build
-docker build -f deployments/docker/Dockerfile.control-plane -t novusmesh-server .
+docker build -f deployments/docker/Dockerfile.control-plane -t NovusGate-server .
 ```
 
 ### Test

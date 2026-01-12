@@ -95,7 +95,7 @@ export const useAppStore = create<AppState>()(
       clearEvents: () => set({ recentEvents: [] }),
     }),
     {
-      name: 'novusmesh-storage',
+      name: 'novusgate-storage',
       partialize: (state) => ({
         currentNetworkId: state.currentNetworkId,
         theme: state.theme,

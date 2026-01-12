@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
-	"github.com/novusmesh/novusmesh/internal/shared/models"
+	"github.com/novusgate/novusgate/internal/shared/models"
 )
 
 // Store provides database operations for the control plane

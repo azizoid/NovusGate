@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/novusmesh/novusmesh/internal/shared/models"
-	"github.com/novusmesh/novusmesh/internal/wireguard"
+	"github.com/novusgate/novusgate/internal/shared/models"
+	"github.com/novusgate/novusgate/internal/wireguard"
 	"github.com/skip2/go-qrcode"
 )
 
@@ -300,7 +300,7 @@ func (s *Server) handleNodeInstallScript(w http.ResponseWriter, r *http.Request)
 	script := fmt.Sprintf(`#!/bin/bash
 set -e
 
-echo "Starting NovusMesh Client Installation..."
+echo "Starting novusgate Client Installation..."
 
 # 1. Install WireGuard
 if ! command -v wg &> /dev/null; then

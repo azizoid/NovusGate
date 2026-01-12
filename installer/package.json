@@ -1,7 +1,7 @@
 {
-    "name": "novusmesh-installer",
+    "name": "novusgate-installer",
     "version": "1.0.0",
-    "description": "Web-based installer for novusmesh Server",
+    "description": "Web-based installer for novusgate Server",
     "main": "server.js",
     "scripts": {
         "start": "node server.js"

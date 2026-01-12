@@ -10,14 +10,15 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/novusmesh/novusmesh/internal/controlplane/store"
-	"github.com/novusmesh/novusmesh/internal/shared/models"
-	"github.com/novusmesh/novusmesh/internal/wireguard"
+	"github.com/novusgate/novusgate/internal/controlplane/store"
+	"github.com/novusgate/novusgate/internal/shared/models"
+	"github.com/novusgate/novusgate/internal/wireguard"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -26,7 +27,7 @@ var (
 	adminUsername = getEnvOrDefault("ADMIN_USERNAME", "admin")
 	adminPassword = getEnvOrDefault("ADMIN_PASSWORD", "") // REQUIRED - set via environment
 	adminToken    = ""
-	apiKey        = getEnvOrDefault("novusmesh_API_KEY", "") // Request-level security key
+	apiKey        = getEnvOrDefault("novusgate_API_KEY", "") // Request-level security key
 )
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -276,6 +277,15 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/users", s.handleListUsers).Methods("GET")
 	api.HandleFunc("/users", s.handleCreateUser).Methods("POST")
 	api.HandleFunc("/users/{id}", s.handleDeleteUser).Methods("DELETE")
+
+	// System Info & Monitoring
+	api.HandleFunc("/system/info", s.handleSystemInfo).Methods("GET")
+	api.HandleFunc("/system/fail2ban/status", s.handleFail2BanStatus).Methods("GET")
+	api.HandleFunc("/system/fail2ban/logs", s.handleFail2BanLogs).Methods("GET")
+	api.HandleFunc("/system/fail2ban/unban", s.handleFail2BanUnban).Methods("POST")
+	
+	// All Networks Stats (for dashboard)
+	api.HandleFunc("/stats/overview", s.handleStatsOverview).Methods("GET")
 
 	// Helper for SPA (Single Page Application) serving
 	s.router.PathPrefix("/").HandlerFunc(s.handleSPA)
@@ -1026,6 +1036,408 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"status":  "healthy",
 		"version": "0.1.0",
+	})
+}
+
+// System Info - CPU, RAM, Disk
+func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	info := map[string]interface{}{}
+	
+	// CPU Info
+	cpuInfo, _ := os.ReadFile("/proc/cpuinfo")
+	cpuCount := strings.Count(string(cpuInfo), "processor")
+	info["cpu_cores"] = cpuCount
+	
+	// CPU Model
+	for _, line := range strings.Split(string(cpuInfo), "\n") {
+		if strings.HasPrefix(line, "model name") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				info["cpu_model"] = strings.TrimSpace(parts[1])
+				break
+			}
+		}
+	}
+	
+	// Load Average
+	loadAvg, _ := os.ReadFile("/proc/loadavg")
+	if len(loadAvg) > 0 {
+		parts := strings.Fields(string(loadAvg))
+		if len(parts) >= 3 {
+			info["load_1m"] = parts[0]
+			info["load_5m"] = parts[1]
+			info["load_15m"] = parts[2]
+		}
+	}
+	
+	// Memory Info
+	memInfo, _ := os.ReadFile("/proc/meminfo")
+	memMap := make(map[string]int64)
+	for _, line := range strings.Split(string(memInfo), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			key := strings.TrimSuffix(parts[0], ":")
+			var val int64
+			fmt.Sscanf(parts[1], "%d", &val)
+			memMap[key] = val * 1024 // Convert KB to bytes
+		}
+	}
+	info["memory_total"] = memMap["MemTotal"]
+	info["memory_free"] = memMap["MemFree"]
+	info["memory_available"] = memMap["MemAvailable"]
+	info["memory_used"] = memMap["MemTotal"] - memMap["MemAvailable"]
+	info["memory_buffers"] = memMap["Buffers"]
+	info["memory_cached"] = memMap["Cached"]
+	
+	// Disk Info (root partition)
+	// Using df command for simplicity
+	dfOut, err := execCommand("df", "-B1", "/")
+	if err == nil {
+		lines := strings.Split(dfOut, "\n")
+		if len(lines) >= 2 {
+			fields := strings.Fields(lines[1])
+			if len(fields) >= 4 {
+				var total, used, avail int64
+				fmt.Sscanf(fields[1], "%d", &total)
+				fmt.Sscanf(fields[2], "%d", &used)
+				fmt.Sscanf(fields[3], "%d", &avail)
+				info["disk_total"] = total
+				info["disk_used"] = used
+				info["disk_free"] = avail
+			}
+		}
+	}
+	
+	// Uptime
+	uptimeData, _ := os.ReadFile("/proc/uptime")
+	if len(uptimeData) > 0 {
+		var uptime float64
+		fmt.Sscanf(string(uptimeData), "%f", &uptime)
+		info["uptime_seconds"] = int64(uptime)
+	}
+	
+	// Hostname
+	hostname, _ := os.Hostname()
+	info["hostname"] = hostname
+	
+	jsonResponse(w, http.StatusOK, info)
+}
+
+// execCommand helper
+func execCommand(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// execHostCommand executes a command on the host system using nsenter
+// This is needed because fail2ban runs on host, not in container
+func execHostCommand(name string, args ...string) (string, error) {
+	// First try direct execution (works if binary is mounted or we're on host)
+	cmd := exec.Command(name, args...)
+	out, err := cmd.Output()
+	if err == nil {
+		return string(out), nil
+	}
+	
+	// If direct execution fails, try nsenter to run in host namespace
+	// nsenter -t 1 -m -u -i -n -- command args
+	nsenterArgs := []string{"-t", "1", "-m", "-u", "-i", "-n", "--", name}
+	nsenterArgs = append(nsenterArgs, args...)
+	cmd = exec.Command("nsenter", nsenterArgs...)
+	out, err = cmd.Output()
+	return string(out), err
+}
+
+// Fail2Ban Status
+func (s *Server) handleFail2BanStatus(w http.ResponseWriter, r *http.Request) {
+	result := map[string]interface{}{
+		"installed": false,
+		"running":   false,
+		"jails":     []map[string]interface{}{},
+	}
+	
+	// Check if fail2ban is installed (try host command)
+	_, err := execHostCommand("fail2ban-client", "--version")
+	if err != nil {
+		result["error"] = "fail2ban not installed on host"
+		jsonResponse(w, http.StatusOK, result)
+		return
+	}
+	result["installed"] = true
+	
+	// Check if running
+	statusOut, err := execHostCommand("fail2ban-client", "status")
+	if err != nil {
+		result["error"] = "fail2ban service not responding"
+		jsonResponse(w, http.StatusOK, result)
+		return
+	}
+	result["running"] = true
+	
+	// Parse jails
+	jails := []string{}
+	for _, line := range strings.Split(statusOut, "\n") {
+		if strings.Contains(line, "Jail list:") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				jailList := strings.TrimSpace(parts[1])
+				for _, j := range strings.Split(jailList, ",") {
+					j = strings.TrimSpace(j)
+					if j != "" {
+						jails = append(jails, j)
+					}
+				}
+			}
+		}
+	}
+	
+	// Get details for each jail
+	jailDetails := []map[string]interface{}{}
+	for _, jail := range jails {
+		jailInfo := map[string]interface{}{
+			"name": jail,
+		}
+		
+		jailStatus, err := execHostCommand("fail2ban-client", "status", jail)
+		if err == nil {
+			// Parse banned IPs and stats
+			for _, line := range strings.Split(jailStatus, "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "Currently banned:") {
+					var count int
+					fmt.Sscanf(line, "Currently banned: %d", &count)
+					jailInfo["banned_count"] = count
+				}
+				if strings.HasPrefix(line, "Total banned:") {
+					var count int
+					fmt.Sscanf(line, "Total banned: %d", &count)
+					jailInfo["total_banned"] = count
+				}
+				if strings.HasPrefix(line, "Banned IP list:") {
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						ips := strings.TrimSpace(parts[1])
+						if ips != "" {
+							jailInfo["banned_ips"] = strings.Fields(ips)
+						} else {
+							jailInfo["banned_ips"] = []string{}
+						}
+					}
+				}
+				if strings.HasPrefix(line, "Currently failed:") {
+					var count int
+					fmt.Sscanf(line, "Currently failed: %d", &count)
+					jailInfo["failed_count"] = count
+				}
+				if strings.HasPrefix(line, "Total failed:") {
+					var count int
+					fmt.Sscanf(line, "Total failed: %d", &count)
+					jailInfo["total_failed"] = count
+				}
+			}
+		}
+		jailDetails = append(jailDetails, jailInfo)
+	}
+	result["jails"] = jailDetails
+	
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// Fail2Ban Logs
+func (s *Server) handleFail2BanLogs(w http.ResponseWriter, r *http.Request) {
+	// Get last N lines from fail2ban log
+	lines := r.URL.Query().Get("lines")
+	if lines == "" {
+		lines = "100"
+	}
+	
+	logPath := "/var/log/fail2ban.log"
+	
+	// Check if log exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"logs":  []string{},
+			"error": "fail2ban log not found",
+		})
+		return
+	}
+	
+	// Use tail to get last N lines
+	out, err := execCommand("tail", "-n", lines, logPath)
+	if err != nil {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"logs":  []string{},
+			"error": err.Error(),
+		})
+		return
+	}
+	
+	logLines := strings.Split(strings.TrimSpace(out), "\n")
+	
+	// Parse logs into structured format
+	parsedLogs := []map[string]string{}
+	for _, line := range logLines {
+		if line == "" {
+			continue
+		}
+		
+		logEntry := map[string]string{
+			"raw": line,
+		}
+		
+		// Try to parse timestamp and action
+		// Format: 2024-01-15 10:30:45,123 fail2ban.actions [12345]: NOTICE [sshd] Ban 192.168.1.100
+		parts := strings.SplitN(line, " fail2ban.", 2)
+		if len(parts) >= 1 {
+			logEntry["timestamp"] = strings.TrimSpace(parts[0])
+		}
+		
+		if strings.Contains(line, "Ban") {
+			logEntry["action"] = "ban"
+		} else if strings.Contains(line, "Unban") {
+			logEntry["action"] = "unban"
+		} else if strings.Contains(line, "Found") {
+			logEntry["action"] = "found"
+		}
+		
+		parsedLogs = append(parsedLogs, logEntry)
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"logs":  parsedLogs,
+		"count": len(parsedLogs),
+	})
+}
+
+// Fail2Ban Unban IP
+func (s *Server) handleFail2BanUnban(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Jail string `json:"jail"`
+		IP   string `json:"ip"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errorResponse(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	
+	if req.Jail == "" || req.IP == "" {
+		errorResponse(w, http.StatusBadRequest, "jail and ip are required")
+		return
+	}
+	
+	// Validate IP format
+	if net.ParseIP(req.IP) == nil {
+		errorResponse(w, http.StatusBadRequest, "invalid IP address")
+		return
+	}
+	
+	// Execute unban
+	_, err := execHostCommand("fail2ban-client", "set", req.Jail, "unbanip", req.IP)
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to unban IP: "+err.Error())
+		return
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"status":  "success",
+		"message": fmt.Sprintf("IP %s unbanned from jail %s", req.IP, req.Jail),
+	})
+}
+
+// Stats Overview - All networks combined
+func (s *Server) handleStatsOverview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	
+	// Get all networks
+	networks, err := s.store.ListNetworks(ctx)
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, "failed to list networks")
+		return
+	}
+	
+	totalNodes := 0
+	onlineNodes := 0
+	offlineNodes := 0
+	pendingNodes := 0
+	expiredNodes := 0
+	totalRx := int64(0)
+	totalTx := int64(0)
+	
+	networkStats := []map[string]interface{}{}
+	
+	for _, network := range networks {
+		nodes, err := s.store.ListNodes(ctx, network.ID)
+		if err != nil {
+			continue
+		}
+		
+		// Get WireGuard peers for real-time status
+		var peers map[string]wireguard.PeerStatus
+		mgr := s.getManager(network.ID)
+		if mgr != nil {
+			peers, _ = mgr.GetPeers()
+		}
+		
+		netOnline := 0
+		netOffline := 0
+		netPending := 0
+		netExpired := 0
+		netRx := int64(0)
+		netTx := int64(0)
+		
+		for _, node := range nodes {
+			s.enrichNode(node, peers)
+			
+			switch node.Status {
+			case models.NodeStatusOnline:
+				netOnline++
+				onlineNodes++
+			case models.NodeStatusOffline:
+				netOffline++
+				offlineNodes++
+			case models.NodeStatusPending:
+				netPending++
+				pendingNodes++
+			case models.NodeStatusExpired:
+				netExpired++
+				expiredNodes++
+			}
+			
+			netRx += node.TransferRx
+			netTx += node.TransferTx
+		}
+		
+		totalNodes += len(nodes)
+		totalRx += netRx
+		totalTx += netTx
+		
+		networkStats = append(networkStats, map[string]interface{}{
+			"id":            network.ID,
+			"name":          network.Name,
+			"cidr":          network.CIDR,
+			"interface":     network.InterfaceName,
+			"total_nodes":   len(nodes),
+			"online_nodes":  netOnline,
+			"offline_nodes": netOffline,
+			"pending_nodes": netPending,
+			"expired_nodes": netExpired,
+			"transfer_rx":   netRx,
+			"transfer_tx":   netTx,
+		})
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"total_networks": len(networks),
+		"total_nodes":    totalNodes,
+		"online_nodes":   onlineNodes,
+		"offline_nodes":  offlineNodes,
+		"pending_nodes":  pendingNodes,
+		"expired_nodes":  expiredNodes,
+		"total_rx":       totalRx,
+		"total_tx":       totalTx,
+		"networks":       networkStats,
 	})
 }
 

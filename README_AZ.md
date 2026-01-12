@@ -1,25 +1,44 @@
-# NovusMesh
+# NovusGate
 
 🚀 **Öz şəxsi VPN şəbəkənizi qurun — SaaS asılılığı və ya ağrılı konfiqurasiyalar olmadan.**
 
-**NovusMesh** — **WireGuard®** protokolu üzərində qurulmuş, müasir, tamamilə özünü idarə edən (self-hosted) **VPN idarəetmə panelidir**.
+**NovusGate** — **WireGuard®** protokolu üzərində qurulmuş, müasir, tamamilə özünü idarə edən (self-hosted) **VPN idarəetmə panelidir**.
 Bu sistem, tək bir veb paneldən idarə olunan təmiz **Hub-and-Spoke (Mərkəz və Budaq) arxitekturası** vasitəsilə serverləri, bulud instansiyalarını və şəxsi cihazları təhlükəsiz şəkildə birləşdirməyə imkan verir.
 
-İstər istehsalat (production) infrastrukturunu idarə edin, istərsə də sadəcə şəxsi şəbəkənizə tam sahib olmaq istəyin — **NovusMesh sizə aydınlıq, təhlükəsizlik və nəzarət bəxş edir**.
+İstər istehsalat (production) infrastrukturunu idarə edin, istərsə də sadəcə şəxsi şəbəkənizə tam sahib olmaq istəyin — **NovusGate sizə aydınlıq, təhlükəsizlik və nəzarət bəxş edir**.
 
-![NovusMesh Dashboard](web/public/novusmesh_banner.png)
+![NovusGate Dashboard](web/public/novusgate_banner.png)
 
 ---
 
-## ✨ Niyə NovusMesh?
+## ⚠️ Vacib: NovusGate Nədir (və Nə Deyil)
 
-Bu gün mövcud olan VPN həllərinin əksəriyyəti ya:
+**NovusGate "IP-ni gizlət" və ya "geo-məhdudiyyətləri keç" tipli VPN DEYİL.**
+
+Bu, aşağıdakılar üçün nəzərdə tutulmuş **şəxsi şəbəkə infrastruktur alətidir**:
+- ✅ Serverlər arası təhlükəsiz kommunikasiya
+- ✅ Daxili xidmətlərə uzaqdan giriş
+- ✅ Paylanmış infrastrukturu birləşdirmək
+- ✅ Etibarlı şəxsi şəbəkələr qurmaq
+
+**Trafik Yönləndirməsi:**
+- Yalnız VPN subnet-lərinə (məs., `10.x.x.x`) gedən trafik tuneldən keçir
+- Adi internet trafikiniz (YouTube, Google və s.) birbaşa ISP-nizdən keçir
+- Buna **Split Tunneling** deyilir — səmərəli və məqsədyönlü
+
+Əgər bütün trafikinizi gizlətmək üçün "full tunnel" VPN lazımdırsa, NovusGate sizin üçün uyğun alət deyil. Bu məqsəd üçün kommersiya VPN xidmətlərindən istifadə edin.
+
+---
+
+## ✨ Niyə NovusGate?
+
+Bu gün mövcud olan şəxsi şəbəkə həllərinin əksəriyyəti ya:
 - ❌ "Qara qutu" kimi işləyən SaaS həlləridir
 - ❌ Böyük miqyasda idarə edilməsi çətindir
 - ❌ Kiçik komandalar üçün həddindən artıq mürəkkəbdir
 - ❌ Ya da öz serverində qurmaq (self-host) çox ağrılıdır
 
-**NovusMesh fərqli olmaq üçün yaradılıb.**
+**NovusGate fərqli olmaq üçün yaradılıb.**
 
 O, diqqəti bunlara yönəldir:
 - **Rahatlıqdan öncə Sahiblik**
@@ -44,7 +63,7 @@ Sizin şəbəkəniz — sizin qaydalarınız.
   Şəbəkələri, qovşaqları idarə etmək, trafiki izləmək və VPN-ə nəzarət etmək üçün React əsaslı gözəl interfeys.
 
 - **Bir Kliklə Quraşdırıcı**
-  Xüsusi Docker əsaslı quraşdırıcı (installer) ilə NovusMesh-i asanlıqla yerləşdirin və yeniləyin.
+  Xüsusi Docker əsaslı quraşdırıcı (installer) ilə NovusGate-i asanlıqla yerləşdirin və yeniləyin.
 
 - **Təhlükəsiz və Ağıllı Yeniləmələr**
   Konfiqurasiyanı və ya şəbəkə vəziyyətini itirmədən sisteminizi yeniləyin.
@@ -55,16 +74,25 @@ Sizin şəbəkəniz — sizin qaydalarınız.
 - **Çox Platformalı Client Dəstəyi**
   Mobil üçün QR kodlar, desktop üçün konfiq yükləmələri, Linux üçün bir sətirlik quraşdırma skriptləri.
 
+- **Server Monitorinq Paneli**
+  Əsas dashboard-da real vaxt rejimində CPU, RAM, Disk istifadəsi və sistem uptime göstəricisi.
+
+- **Fail2Ban İnteqrasiyası**
+  SSH brute-force hücumlarından qorunma, jail idarəetməsi, bloklanmış IP-lərin görüntülənməsi və bir kliklə blokdan çıxarma.
+
+- **Vahid Şəbəkə İcmalı**
+  Dashboard bütün şəbəkələri birləşdirilmiş ümumi statistika ilə, həmçinin hər şəbəkə üzrə ayrıca göstəricilərlə göstərir.
+
 ---
 
-## 👥 NovusMesh Kimlər Üçündür?
+## 👥 NovusGate Kimlər Üçündür?
 
 - **Sistem Adminləri** — serverlər və məlumat mərkəzləri arasında təhlükəsiz giriş təmin edənlər
 - **DevOps Mühəndisləri** — infrastrukturu müxtəlif mühitlər (environments) arasında birləşdirənlər
 - **Proqramçılar** — daxili və ya self-hosted platformalar quranlar
 - **Məxfilik sevənlər** — öz VPN quruluşuna tam nəzarət etmək istəyənlər
 
-Əgər **self-hosting, təhlükəsizlik və sadəliyə** dəyər verirsinizsə, NovusMesh sizin üçündür.
+Əgər **self-hosting, təhlükəsizlik və sadəliyə** dəyər verirsinizsə, NovusGate sizin üçündür.
 
 ---
 
@@ -84,11 +112,11 @@ Sadəcə təmiz şəbəkəçilik.
 
 ## 📂 Sistem Memarlığı
 
-NovusMesh maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys və yerləşdirməni ayıran **modul sistem** kimi dizayn edilib.
+NovusGate maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys və yerləşdirməni ayıran **modul sistem** kimi dizayn edilib.
 
 ```
 +-------------------------------------------------------------+
-|                     NovusMesh Server                        |
+|                     NovusGate Server                        |
 |  +-------------+  +-------------+  +-------------+          |
 |  |  Şəbəkə 1   |  |  Şəbəkə 2   |  |  Şəbəkə N   |          |
 |  |  wg0:51820  |  |  wg1:51821  |  |  wgN:518XX  |          |
@@ -97,7 +125,7 @@ NovusMesh maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys 
 |         |                |                |                 |
 |  +------+----------------+----------------+------+          |
 |  |              REST API (Go Backend)            |          |
-|  |                   SQLite DB                   |          |
+|  |                 PostgreSQL DB                 |          |
 |  +-----------------------------------------------+          |
 +-------------------------------------------------------------+
                             |
@@ -113,7 +141,7 @@ NovusMesh maksimum çeviklik və dayanıqlılıq üçün idarəetmə, interfeys 
 📁 `./server`
 
 **Go** dilində yazılmış əsas məntiq.
-WireGuard interfeyslərini, SQLite verilənlər bazasını idarə edir və REST API təqdim edir.
+WireGuard interfeyslərini, PostgreSQL verilənlər bazasını idarə edir və REST API təqdim edir.
 
 - **Developer Guide:** `./server/DEVELOPER_GUIDE_AZ.md`
 - **User Guide:** `./server/USER_GUIDE_AZ.md`
@@ -149,39 +177,145 @@ Linux serverlərində SSH vasitəsilə yerləşdirməni sadələşdirmək üçü
 
 ### Tələblər
 
+**Yerli kompüterinizdə:**
+- Docker və Docker Compose quraşdırılmış olmalıdır
+
+**Uzaq serverinizdə:**
 - Linux server (Ubuntu 20.04 / 22.04 tövsiyə olunur)
-- Yerli kompüterdə Docker və Docker Compose (quraşdırıcı üçün)
+- Root və ya sudo səlahiyyətli SSH girişi
+- Açıq portlar: 22 (SSH), 51820+ (WireGuard üçün UDP), 8080 (API)
 
 ---
 
-### Installer Vasitəsilə Quraşdırma (Tövsiyə Olunan)
+### Quraşdırma Prosesi (Addım-Addım)
+
+#### Addım 1: Repozitoriyanı Klonlayın
+
+```bash
+git clone https://github.com/Ali7Zeynalli/NovusGate.git
+cd NovusGate
+```
+
+#### Addım 2: Installer-i Başladın
 
 ```bash
 cd installer
 docker-compose up -d --build
 ```
 
-1. Brauzerdə `http://localhost:3017` ünvanını açın.
-2. Uzaq server məlumatlarınızı daxil edin.
-3. **Install NovusMesh Server** düyməsini sıxın.
-4. Quraşdırma bitdikdən sonra Admin VPN-ə qoşulun və Web Dashboard-a daxil olun.
+#### Addım 3: Installer Veb İnterfeysini Açın
 
-**Dashboard URL:** `https://10.99.0.1:3007` (VPN vasitəsilə)  
-**Giriş:** `admin`  
-**Şifrə:** Quraşdırma zamanı göstərilir.
+Brauzerdə bu ünvanı açın:
+```
+http://localhost:3017
+```
+
+#### Addım 4: Uzaq Serverə Qoşulun
+
+Installer interfeysində server məlumatlarınızı daxil edin:
+
+| Sahə | Təsvir |
+|------|--------|
+| **Host** | Serverinizin IP ünvanı (məs., `203.0.113.50`) |
+| **Port** | SSH portu (defolt: `22`) |
+| **Username** | SSH istifadəçi adı (məs., `root` və ya `ubuntu`) |
+| **Password** | SSH şifrəsi və ya SSH açarı istifadə edin |
+
+SSH bağlantısı qurmaq üçün **Connect** düyməsini sıxın.
+
+#### Addım 5: Quraşdırmanı Konfiqurasiya Edin
+
+Qoşulduqdan sonra quraşdırma parametrlərini təyin edin:
+
+| Parametr | Təsvir |
+|----------|--------|
+| **Admin Username** | Dashboard giriş istifadəçi adı (defolt: `admin`) |
+| **Admin Password** | Dashboard giriş şifrəsi (avtomatik yaradılır və ya özünüz təyin edin) |
+| **Server Endpoint** | VPN bağlantıları üçün serverinizin açıq IP-si |
+| **Admin CIDR** | Admin şəbəkə subnet-i (defolt: `10.99.0.0/24`) |
+| **API Key** | Daxili API təhlükəsizlik açarı (avtomatik yaradılır) |
+
+#### Addım 6: Quraşdırmanı Başladın
+
+**Install NovusGate Server** düyməsini sıxın.
+
+Installer aşağıdakıları edəcək:
+1. ✅ Sistem paketlərini yeniləyəcək
+2. ✅ Docker və Docker Compose quraşdıracaq
+3. ✅ WireGuard quraşdıracaq
+4. ✅ Fail2Ban quraşdıracaq (SSH qorunması)
+5. ✅ NovusGate repozitoriyasını klonlayacaq
+6. ✅ Environment dəyişənlərini konfiqurasiya edəcək
+7. ✅ Docker konteynerləri build edib başladacaq
+8. ✅ Admin VPN şəbəkəsi yaradacaq
+9. ✅ Admin VPN konfiqurasiyası generasiya edəcək
+
+#### Addım 7: Giriş Məlumatlarınızı Saxlayın
+
+Quraşdırma bitdikdən sonra installer göstərəcək:
+
+```
+╔════════════════════════════════════════════╗
+║         QURAŞDIRMA TAMAMLANDI!             ║
+╠════════════════════════════════════════════╣
+║  Admin Username: admin                     ║
+║  Admin Password: xxxxxxxxxxxxxxxx          ║
+║                                            ║
+║  Dashboard URL: https://10.99.0.1:3007     ║
+║  (Yalnız VPN vasitəsilə əlçatandır)        ║
+╚════════════════════════════════════════════╝
+```
+
+⚠️ **VACİB:** Bu məlumatları dərhal saxlayın! Bir daha göstərilməyəcək.
+
+#### Addım 8: Admin VPN Konfiqini Yükləyin
+
+Installer sizə admin VPN konfiqurasiyasını təqdim edir:
+- **QR Kod** - WireGuard mobil tətbiqi ilə skan edin
+- **Download .conf** - Desktop WireGuard client üçün
+- **Copy Config** - Manual konfiqurasiya
+
+#### Addım 9: Admin VPN-ə Qoşulun
+
+1. Cihazınıza WireGuard client quraşdırın
+2. Admin konfiqurasiyasını import edin
+3. VPN bağlantısını aktivləşdirin
+4. Bağlantını yoxlayın (IP `10.99.0.2` kimi olmalıdır)
+
+#### Addım 10: Dashboard-a Daxil Olun
+
+VPN-ə qoşulduqdan sonra açın:
+```
+https://10.99.0.1:3007
+```
+
+Addım 7-dəki admin məlumatları ilə daxil olun.
+
+🎉 **Təbrik edirik!** NovusGate quraşdırıldı və istifadəyə hazırdır.
+
+---
+
+### Quraşdırmadan Sonra
+
+Dashboard-a daxil olduqdan sonra edə bilərsiniz:
+- Əlavə VPN şəbəkələri yaratmaq
+- Şəbəkələrə node/client əlavə etmək
+- Server resurslarını izləmək
+- Fail2Ban təhlükəsizliyini idarə etmək
+- Trafik statistikasını görmək
 
 ---
 
 ### Əl ilə Quraşdırma (Manual)
 
-Təcrübəli istifadəçilər üçün:
+Manual quraşdırmanı üstün tutan təcrübəli istifadəçilər üçün:
 👉 **[Server İstifadəçi Təlimatı](./server/USER_GUIDE_AZ.md)**
 
 ---
 
 ## 🌐 Şəbəkə İdarəçiliyi
 
-NovusMesh **çoxlu izolyasiya edilmiş şəbəkələri** dəstəkləyir:
+NovusGate **çoxlu izolyasiya edilmiş şəbəkələri** dəstəkləyir:
 
 | Xüsusiyyət | Təsvir |
 |------------|--------|
@@ -205,8 +339,40 @@ NovusMesh **çoxlu izolyasiya edilmiş şəbəkələri** dəstəkləyir:
 * UDP portlarının **51820+** açıq olduğundan əmin olun (hər şəbəkə üçün bir port).
 * Admin dashboard defolt olaraq **VPN arxasında gizlidir**.
 * İstehsalat (production) mühitində Web Dashboard-u **Nginx və ya Caddy (SSL ilə)** arxasında işlədin.
+* **Fail2Ban** avtomatik quraşdırılır və SSH-ı qorumaq üçün konfiqurasiya edilir (3 uğursuz cəhd = 1 saat blok).
 
 Təhlükəsizlik seçim deyil — bu, standartdır.
+
+---
+
+## 📊 Server Monitorinqi
+
+NovusGate daxili server monitorinqi ilə gəlir:
+
+| Göstərici | Təsvir |
+|-----------|--------|
+| **CPU İstifadəsi** | Real vaxt rejimində prosessor yüklənməsi faizi |
+| **RAM İstifadəsi** | İstifadə olunan/ümumi yaddaş göstəricisi |
+| **Disk İstifadəsi** | Kök bölməsi üçün yaddaş istifadəsi |
+| **Uptime** | Son yenidən başlatmadan bəri serverin işləmə müddəti |
+
+Bütün göstəricilər əsas Dashboard-da göstərilir və avtomatik yenilənir.
+
+---
+
+## 🔒 Fail2Ban İdarəetməsi
+
+Serverinizi brute-force hücumlarından qoruyun:
+
+| Xüsusiyyət | Təsvir |
+|------------|--------|
+| **Jail Statusu** | Aktiv jail-ləri (SSH və s.) və onların konfiqurasiyasını görün |
+| **Bloklanmış IP-lər** | Hər jail üzrə hazırda bloklanmış IP ünvanlarını görün |
+| **Blok Statistikası** | Ümumi bloklar, cari bloklar, uğursuz cəhdlər |
+| **Bir Kliklə Blokdan Çıxarma** | Veb interfeysdən IP ünvanlarını dərhal blokdan çıxarın |
+| **Log Görüntüləyicisi** | Fail2Ban loglarını əməliyyat filtri ilə nəzərdən keçirin |
+
+Dashboard-da **Security → Fail2Ban** bölməsindən daxil olun.
 
 ---
 
@@ -242,7 +408,7 @@ Töhfə verməzdən əvvəl zəhmət olmasa **Developer Təlimatlarını** oxuyu
 
 ## ⭐ Layihəyə Dəstək
 
-Əgər **NovusMesh** sizin üçün faydalıdırsa:
+Əgər **NovusGate** sizin üçün faydalıdırsa:
 
 * ⭐ Repozitoriyaya ulduz (Star) verin
 * 🐛 Xətalar barədə məlumat verin (Issues)
@@ -254,4 +420,4 @@ Açıq-qaynaq (Open-source) icma ilə yaşayır.
 ---
 
 **[Ali Zeynalli](https://github.com/Ali7Zeynalli) tərəfindən hazırlanıb**
-*Project NovusMesh*
+*Project NovusGate*

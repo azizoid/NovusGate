@@ -1,4 +1,4 @@
-module github.com/novusmesh/novusmesh
+module github.com/novusgate/novusgate
 
 go 1.23.0
 

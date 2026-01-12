@@ -1,8 +1,8 @@
-# NovusMesh Installer - Developer Təlimatı
+# NovusGate Installer - Developer Təlimatı
 
 ## İcmal
 
-**NovusMesh Installer**, uzaq Linux serverlərdə NovusMesh VPN-in yerləşdirilməsi, yenilənməsi və idarə edilməsi üçün veb əsaslı idarəetmə alətidir. Yerli olaraq (Docker vasitəsilə) işləyir və SSH üzərindən hədəf serverlərə qoşulur.
+**NovusGate Installer**, uzaq Linux serverlərdə NovusGate VPN-in yerləşdirilməsi, yenilənməsi və idarə edilməsi üçün veb əsaslı idarəetmə alətidir. Yerli olaraq (Docker vasitəsilə) işləyir və SSH üzərindən hədəf serverlərə qoşulur.
 
 ## Arxitektura
 
@@ -45,7 +45,7 @@ installer/
 #### Quraşdırma Endpointləri
 | Metod | Endpoint | Təsvir |
 |-------|----------|--------|
-| `POST` | `/api/servers/:id/install` | NovusMesh quraşdır/yenilə/yenidən quraşdır |
+| `POST` | `/api/servers/:id/install` | NovusGate quraşdır/yenilə/yenidən quraşdır |
 | `POST` | `/api/servers/:id/uninstall` | Tam silmə |
 | `POST` | `/api/servers/:id/command` | Xüsusi SSH əmri icra et |
 
@@ -83,7 +83,7 @@ Bütün quraşdırma məntiqi `server.js`-də template literal olaraq saxlanıl�
          │
          ▼
 ┌─────────────────┐
-│ Arxiv Yarat     │  tar -czf novusmesh.tar.gz server/ web/
+│ Arxiv Yarat     │  tar -czf NovusGate.tar.gz server/ web/
 │ (yerli fayllar) │
 └────────┬────────┘
          │
@@ -94,7 +94,7 @@ Bütün quraşdırma məntiqi `server.js`-də template literal olaraq saxlanıl�
          │
          ▼
 ┌─────────────────┐
-│ Arxiv Yüklə     │  SFTP ilə /tmp/novusmesh.tar.gz
+│ Arxiv Yüklə     │  SFTP ilə /tmp/NovusGate.tar.gz
 └────────┬────────┘
          │
          ▼
@@ -206,8 +206,8 @@ source.onmessage = (e) => {
 | `adminUsername` | `admin` | Dashboard admin istifadəçi adı |
 | `adminPassword` | avtomatik | Dashboard admin parolu |
 | `vpnIp` | `10.99.0.1` | Admin VPN gateway IP |
-| `dbName` | `novusmesh` | PostgreSQL verilənlər bazası adı |
-| `dbUser` | `novusmesh` | PostgreSQL istifadəçi adı |
+| `dbName` | `NovusGate` | PostgreSQL verilənlər bazası adı |
+| `dbUser` | `NovusGate` | PostgreSQL istifadəçi adı |
 | `dbPassword` | avtomatik | PostgreSQL parolu |
 
 ## İnkişaf

@@ -4,40 +4,42 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: novusmesh-postgres
+    container_name: novusgate-postgres
     environment:
-      POSTGRES_DB: ${DB_NAME:-novusmesh}
-      POSTGRES_USER: ${DB_USER:-novusmesh}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-novusmesh_secret}
+      POSTGRES_DB: ${DB_NAME:-novusgate}
+      POSTGRES_USER: ${DB_USER:-novusgate}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-novusgate_secret}
     volumes:
       - ../../data/postgres:/var/lib/postgresql/data
       - ../../migrations:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-novusmesh}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-novusgate}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - novusmesh-network
+      - novusgate-network
 
   # Control Plane Server
   control-plane:
     build:
       context: ../../
       dockerfile: deployments/docker/Dockerfile.control-plane
-    container_name: novusmesh-control-plane
+    container_name: novusgate-control-plane
     # HOST NETWORK MODE: Required for WireGuard VPN to work properly
     # VPN traffic must pass through host network, not Docker bridge
     network_mode: host
+    # PID namespace sharing for nsenter to access host processes (fail2ban)
+    pid: host
     environment:
-      DATABASE_URL: postgres://${DB_USER:-novusmesh}:${DB_PASSWORD:-novusmesh_secret}@localhost:5432/${DB_NAME:-novusmesh}?sslmode=disable
-      novusmesh_LISTEN: ":8080"
-      novusmesh_GRPC_LISTEN: ":8443"
+      DATABASE_URL: postgres://${DB_USER:-novusgate}:${DB_PASSWORD:-novusgate_secret}@localhost:5432/${DB_NAME:-novusgate}?sslmode=disable
+      novusgate_LISTEN: ":8080"
+      novusgate_GRPC_LISTEN: ":8443"
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
 
-      novusmesh_API_KEY: ${API_KEY:-novusmesh_secret_key}
+      novusgate_API_KEY: ${API_KEY:-novusgate_secret_key}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       WG_SERVER_ENDPOINT: ${WG_SERVER_ENDPOINT:-127.0.0.1}
@@ -49,6 +51,8 @@ services:
       # CRITICAL: Mount host's actual /etc/wireguard directory
       # This allows container to read keys created by installer
       - /etc/wireguard:/etc/wireguard:rw
+      # Mount fail2ban log for reading
+      - /var/log/fail2ban.log:/var/log/fail2ban.log:ro
     # Note: With host network, ports are automatically exposed on host
     # Port 8080 (HTTP API), 8443 (gRPC), 51820 (WireGuard UDP)
     depends_on:
@@ -64,7 +68,7 @@ services:
     build:
       context: ../../../web
       dockerfile: Dockerfile
-    container_name: novusmesh-web
+    container_name: novusgate-web
     network_mode: host
     environment:
       API_URL: ${API_URL:-http://localhost:8080}
@@ -75,5 +79,5 @@ services:
 
 
 networks:
-  novusmesh-network:
+  novusgate-network:
     driver: bridge

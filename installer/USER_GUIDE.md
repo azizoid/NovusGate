@@ -1,8 +1,8 @@
-# NovusMesh Installer - User Guide
+# NovusGate Installer - User Guide
 
 ## Introduction
 
-The NovusMesh Installer is a web-based control panel for deploying and managing NovusMesh VPN servers. It allows you to install, update, and monitor your VPN infrastructure from a simple dashboard.
+The NovusGate Installer is a web-based control panel for deploying and managing NovusGate VPN servers. It allows you to install, update, and monitor your VPN infrastructure from a simple dashboard.
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ Access the dashboard at: `http://localhost:3017`
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  NovusMesh                                                  │
+│  NovusGate                                                  │
 ├─────────────┬───────────────────────────────────────────────┤
 │             │                                               │
 │  SERVERS    │   Server Dashboard                            │
@@ -48,9 +48,9 @@ Access the dashboard at: `http://localhost:3017`
 │             │                                               │
 │             │   Docker Containers                           │
 │             │   ┌─────────────────────────────────────┐    │
-│             │   │ novusmesh-control-plane  Running    │    │
-│             │   │ novusmesh-web            Running    │    │
-│             │   │ novusmesh-postgres       Running    │    │
+│             │   │ NovusGate-control-plane  Running    │    │
+│             │   │ NovusGate-web            Running    │    │
+│             │   │ NovusGate-postgres       Running    │    │
 │             │   └─────────────────────────────────────┘    │
 └─────────────┴───────────────────────────────────────────────┘
 ```
@@ -71,7 +71,7 @@ Access the dashboard at: `http://localhost:3017`
 ### Fresh Install
 
 1. Select your server from the sidebar
-2. Click **📦 Install NovusMesh Server**
+2. Click **📦 Install NovusGate Server**
 3. Configure installation options:
 
 | Option | Default | Description |
@@ -79,8 +79,8 @@ Access the dashboard at: `http://localhost:3017`
 | Admin Username | `admin` | Dashboard login username |
 | Admin Password | auto | Leave empty to auto-generate |
 | Admin Network IP | `10.99.0.1` | VPN gateway IP for admin access |
-| Database Name | `novusmesh` | PostgreSQL database |
-| Database User | `novusmesh` | PostgreSQL username |
+| Database Name | `NovusGate` | PostgreSQL database |
+| Database User | `NovusGate` | PostgreSQL username |
 | Database Password | auto | Leave empty to auto-generate |
 
 4. Click **Start Installation 🚀**
@@ -220,7 +220,7 @@ Runs database migrations without touching files or containers:
 If the installer can't connect, SSH manually:
 ```bash
 ssh root@your-server-ip
-cd /opt/novusmesh
+cd /opt/NovusGate
 docker-compose -f server/deployments/docker/docker-compose.yml logs -f
 ```
 

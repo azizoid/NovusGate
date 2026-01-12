@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/Dashboard';
 import { NodesPage, NodeDetailPage } from './pages/Nodes';
 import { SettingsPage } from './pages/Settings';
 import { Networks } from './pages/Networks';
+import { Fail2BanPage } from './pages/Fail2Ban';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -63,7 +64,7 @@ const LoginPage = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">NovusMesh</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">NovusGate</h1>
         <p className="text-gray-500 mt-2">Sign in to your dashboard</p>
       </div>
       
@@ -132,6 +133,7 @@ function App() {
             <Route path="networks" element={<Networks />} />
             <Route path="nodes" element={<NodesPage />} />
             <Route path="nodes/:id" element={<NodeDetailPage />} />
+            <Route path="fail2ban" element={<Fail2BanPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

@@ -1,8 +1,8 @@
-# NovusMesh Web Dashboard - İstifadəçi Təlimatı
+# NovusGate Web Dashboard - İstifadəçi Təlimatı
 
 ## Giriş
 
-NovusMesh Web Dashboard, WireGuard VPN şəbəkəsini idarə etmək üçün vizual idarəetmə mərkəzinizdir. İstənilən brauzerdən cihazlar əlavə etməyə, əlaqələri izləməyə, konfiqurasiyaları yükləməyə və istifadəçi girişini idarə etməyə imkan verir.
+NovusGate Web Dashboard, WireGuard VPN şəbəkəsini idarə etmək üçün vizual idarəetmə mərkəzinizdir. İstənilən brauzerdən cihazlar əlavə etməyə, əlaqələri izləməyə, konfiqurasiyaları yükləməyə və istifadəçi girişini idarə etməyə imkan verir.
 
 ## Başlamaq
 
@@ -25,10 +25,10 @@ Quraşdırmadan sonra dashboard bu ünvanda əlçatandır:
 
 ```
 +-------------------------------------------------------------+
-|  NovusMesh                            [Qaranliq Rejim] [👤] |
+|  NovusGate                            [Qaranliq Rejim] [👤] |
 +-------------+-----------------------------------------------+
 |             |                                               |
-|  Dashboard  |   NovusMesh-e Xos Gelmisiniz                  |
+|  Dashboard  |   NovusGate-e Xos Gelmisiniz                  |
 |  Nodes      |                                               |
 |  Networks   |   +---------+ +---------+ +---------+         |
 |  Settings   |   | Umumi   | | Online  | | Offline |         |

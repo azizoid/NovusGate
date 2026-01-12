@@ -60,9 +60,10 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  onClick?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className, padding = 'md' }) => {
+export const Card: React.FC<CardProps> = ({ children, className, padding = 'md', onClick }) => {
   const paddings = {
     none: '',
     sm: 'p-3',
@@ -71,11 +72,15 @@ export const Card: React.FC<CardProps> = ({ children, className, padding = 'md' 
   };
 
   return (
-    <div className={clsx(
-      'bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700',
-      paddings[padding],
-      className
-    )}>
+    <div 
+      className={clsx(
+        'bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700',
+        paddings[padding],
+        onClick && 'cursor-pointer',
+        className
+      )}
+      onClick={onClick}
+    >
       {children}
     </div>
   );

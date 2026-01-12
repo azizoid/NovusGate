@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/novusmesh/novusmesh/internal/controlplane/api/rest"
-	"github.com/novusmesh/novusmesh/internal/controlplane/store"
-	"github.com/novusmesh/novusmesh/internal/shared/models"
-	"github.com/novusmesh/novusmesh/internal/wireguard"
+	"github.com/novusgate/novusgate/internal/controlplane/api/rest"
+	"github.com/novusgate/novusgate/internal/controlplane/store"
+	"github.com/novusgate/novusgate/internal/shared/models"
+	"github.com/novusgate/novusgate/internal/wireguard"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/bcrypt"
@@ -34,9 +34,9 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "novusmesh-server",
-	Short: "novusmesh Control Plane Server",
-	Long: `novusmesh Control Plane manages mesh VPN networks,
+	Use:   "novusgate-server",
+	Short: "novusgate Control Plane Server",
+	Long: `novusgate Control Plane manages mesh VPN networks,
 nodes, services, and access policies.`,
 }
 
@@ -62,7 +62,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("novusmesh Control Plane v%s\n", version)
+		fmt.Printf("novusgate Control Plane v%s\n", version)
 	},
 }
 
@@ -70,7 +70,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: /etc/novusmesh/server.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: /etc/novusgate/server.yaml)")
 	
 	// Serve command flags
 	serveCmd.Flags().String("listen", ":8080", "HTTP listen address")
@@ -103,13 +103,13 @@ func initConfig() {
 	} else {
 		viper.SetConfigName("server")
 		viper.SetConfigType("yaml")
-		viper.AddConfigPath("/etc/novusmesh")
-		viper.AddConfigPath("$HOME/.novusmesh")
+		viper.AddConfigPath("/etc/novusgate")
+		viper.AddConfigPath("$HOME/.novusgate")
 		viper.AddConfigPath(".")
 	}
 
 	// Environment variables
-	viper.SetEnvPrefix("novusmesh")
+	viper.SetEnvPrefix("novusgate")
 	viper.AutomaticEnv()
 
 	// Defaults
@@ -136,7 +136,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("database connection string is required (--database or DATABASE_URL)")
 	}
 
-	fmt.Printf("Starting novusmesh Control Plane v%s\n", version)
+	fmt.Printf("Starting novusgate Control Plane v%s\n", version)
 	fmt.Printf("  HTTP Listen: %s\n", listenAddr)
 	fmt.Printf("  Database: %s\n", maskDatabaseURL(databaseURL))
 
