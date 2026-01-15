@@ -1,8 +1,13 @@
 # NovusGate
 
+[![GitHub stars](https://img.shields.io/github/stars/Ali7Zeynalli/NovusGate?style=social)](https://github.com/Ali7Zeynalli/NovusGate/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![WireGuard](https://img.shields.io/badge/Protocol-WireGuard-88171A.svg)](https://www.wireguard.com/)
+[![VPN Type](https://img.shields.io/badge/VPN%20Tipi-Uzaqdan%20Giri%C5%9F-blue.svg)](#-vpn-tipi)
+
 🚀 **Öz şəxsi VPN şəbəkənizi qurun — SaaS asılılığı və ya ağrılı konfiqurasiyalar olmadan.**
 
-**NovusGate** — **WireGuard®** protokolu üzərində qurulmuş, müasir, tamamilə özünü idarə edən (self-hosted) **VPN idarəetmə panelidir**.
+**NovusGate** — **WireGuard®** protokolu üzərində qurulmuş, müasir, tamamı ilə özünü idarə edən (self-hosted) **VPN idarəetmə panelidir**.
 Bu sistem, tək bir veb paneldən idarə olunan təmiz **Hub-and-Spoke (Mərkəz və Budaq) arxitekturası** vasitəsilə serverləri, bulud instansiyalarını və şəxsi cihazları təhlükəsiz şəkildə birləşdirməyə imkan verir.
 
 İstər istehsalat (production) infrastrukturunu idarə edin, istərsə də sadəcə şəxsi şəbəkənizə tam sahib olmaq istəyin — **NovusGate sizə aydınlıq, təhlükəsizlik və nəzarət bəxş edir**.
@@ -27,6 +32,47 @@ Bu, aşağıdakılar üçün nəzərdə tutulmuş **şəxsi şəbəkə infrastru
 - Buna **Split Tunneling** deyilir — səmərəli və məqsədyönlü
 
 Əgər bütün trafikinizi gizlətmək üçün "full tunnel" VPN lazımdırsa, NovusGate sizin üçün uyğun alət deyil. Bu məqsəd üçün kommersiya VPN xidmətlərindən istifadə edin.
+
+---
+
+## 🎯 NovusGate Hansı Problemi Həll Edir?
+
+**Ssenari:** Bir yerdə serveriniz var (cloud, ev, ofis) amma:
+- ❌ Ona qoşulmaq üçün statik IP-niz yoxdur
+- ❌ Serverin IP-sini birbaşa internetə açmaq istəmirsiniz
+- ❌ NAT/Firewall birbaşa əlaqəni qeyri-mümkün edir
+
+**NovusGate ilə Həll:**
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Sizin Server  │     │  NovusGate Hub  │     │ Sizin Komputer  │
+│ (Statik IP yox) │     │   (Cloud VPS)   │     │   (Ev/Ofis)     │
+│                 │     │                 │     │                 │
+│   10.10.10.2    │────▶│   10.10.10.1    │◀────│   10.10.10.3    │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                     ▲                     │
+         └──────── Hər ikisi Hub-a qoşulur ─────────┘
+```
+
+Hər iki cihaz NovusGate-ə qoşulduqdan sonra:
+- ✅ Onlar bir-birini **eyni lokal şəbəkədə** kimi görür
+- ✅ Serveriniz `10.10.10.2` olur — həmişə əlçatan
+- ✅ Komputeriniz `10.10.10.3` olur — SSH, RDP və ya istənilən xidmətə qoşula bilər
+- ✅ Port yönləndirmə lazım deyil
+- ✅ Statik IP tələb olunmur
+- ✅ NAT, firewall arxıasında, harədə olsa işləyir
+
+**Real nümunə:**
+```bash
+# Komputeriniizdən (10.10.10.3), serverə qoşulun:
+ssh user@10.10.10.2
+
+# Serverdə işləyən veb xidmətə daxil olun:
+curl http://10.10.10.2:8080
+```
+
+Bu, bütün cihazlarınızın eyni LAN-da olması kimidir — fiziki olaraq harada olmalarından asılı olmayaraq.
 
 ---
 
@@ -85,6 +131,28 @@ Sizin şəbəkəniz — sizin qaydalarınız.
 
 - **Vahid Şəbəkə İcmalı**
   Dashboard bütün şəbəkələri birləşdirilmiş ümumi statistika ilə, həmçinin hər şəbəkə üzrə ayrıca göstəricilərlə göstərir.
+
+---
+
+## 📡 VPN Tipi
+
+**NovusGate Client-əsaslı Arxitektura ilə Uzaqdan Giriş VPN-dir (Remote Access VPN).**
+
+| VPN Tipi | NovusGate? | Təsvir |
+|----------|------------|--------|
+| ☁️ Cloud VPN | ⚠️ | AWS/Azure VPN Gateway kimi idarə olunan xidmət deyil. NovusGate istənilən cloud və ya yerli serverdə quraşdırıla bilər |
+| 🔐 IPsec VPN | ❌ | IPsec əvəzinə WireGuard protokolu istifadə edir |
+| 🌐 SSL VPN | ❌ | Browser-əsaslı deyil, WireGuard client tələb edir |
+| 💻 **Client-əsaslı VPN** | ✅ | WireGuard client proqramı tələb edir |
+| 🏢 Site-to-Site VPN | ⚠️ | Node-lar arası əlaqə ilə mümkündür |
+| 📡 **Uzaqdan Giriş VPN** | ✅ | Əsas istifadə halı |
+
+**Əsas Xüsusiyyətlər:**
+- **Protokol:** WireGuard (müasir, sürətli, təhlükəsiz)
+- **Arxitektura:** Hub-and-Spoke (mərkəzləşdirilmiş idarəetmə)
+- **Tunelleme:** Şifrlənmiş etibarlı tunel, Split Tunneling ilə
+- **Yerləşdirmə:** Cloud-da (istənilən provider) və ya yerli serverdə
+- **Client-lər:** Mobil (QR), Desktop (.conf), Linux (skriptlər)
 
 ---
 
@@ -479,5 +547,11 @@ Açıq-qaynaq (Open-source) icma ilə yaşayır.
 
 ---
 
-**[Ali Zeynalli](https://github.com/Ali7Zeynalli) tərəfindən hazırlanıb**
+## 📄 Lisenziya
+
+Bu layihə **MIT Lisenziyası** altında lisenziyalanıb - ətraflı məlumat üçün [LICENSE](LICENSE) faylına baxın.
+
+---
+
+**[Ali Zeynalli](https://github.com/Ali7Zeynalli) tərəfindən hazırlanıb**  
 *Project NovusGate*

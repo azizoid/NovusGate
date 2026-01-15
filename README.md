@@ -1,5 +1,10 @@
 # NovusGate
 
+[![GitHub stars](https://img.shields.io/github/stars/Ali7Zeynalli/NovusGate?style=social)](https://github.com/Ali7Zeynalli/NovusGate/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![WireGuard](https://img.shields.io/badge/Protocol-WireGuard-88171A.svg)](https://www.wireguard.com/)
+[![VPN Type](https://img.shields.io/badge/VPN%20Type-Remote%20Access-blue.svg)](#-vpn-type)
+
 🚀 **Build your own private VPN network — without SaaS lock-in or painful configurations.**
 
 **NovusGate** is a modern, fully self-hosted **VPN control plane** built on top of the **WireGuard®** protocol.  
@@ -27,6 +32,47 @@ It is a **private network infrastructure tool** designed for:
 - This is called **Split Tunneling** — efficient and purposeful
 
 If you need a "full tunnel" VPN to hide all your traffic, NovusGate is not the right tool. Use commercial VPN services for that purpose.
+
+---
+
+## 🎯 The Problem NovusGate Solves
+
+**Scenario:** You have a server somewhere (cloud, home, office) but:
+- ❌ You don't have a static IP to connect to it
+- ❌ You don't want to expose your server's IP directly to the internet
+- ❌ NAT/Firewall makes direct connections impossible
+
+**Solution with NovusGate:**
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Your Server   │     │  NovusGate Hub  │     │  Your Computer  │
+│   (No Static IP)│     │   (Cloud VPS)   │     │  (Home/Office)  │
+│                 │     │                 │     │                 │
+│   10.10.10.2    │────▶│   10.10.10.1    │◀────│   10.10.10.3    │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                     ▲                     │
+         └────────── Both connect to Hub ──────────┘
+```
+
+Once both devices connect to NovusGate:
+- ✅ They see each other as if on the **same local network**
+- ✅ Your server becomes `10.10.10.2` — always reachable
+- ✅ Your computer becomes `10.10.10.3` — can SSH, RDP, or access any service
+- ✅ No port forwarding needed
+- ✅ No static IP required
+- ✅ Works behind NAT, firewalls, anywhere
+
+**Real-world example:**
+```bash
+# From your computer (10.10.10.3), connect to your server:
+ssh user@10.10.10.2
+
+# Access a web service running on your server:
+curl http://10.10.10.2:8080
+```
+
+It's like having all your devices on the same LAN — no matter where they physically are.
 
 ---
 
@@ -85,6 +131,28 @@ Your network — your rules.
 
 - **Unified Network Overview**  
   Dashboard shows all networks combined with total statistics, plus per-network breakdown.
+
+---
+
+## 📡 VPN Type
+
+**NovusGate is a Remote Access VPN with Client-Based Architecture.**
+
+| VPN Type | NovusGate? | Description |
+|----------|------------|-------------|
+| ☁️ Cloud VPN | ⚠️ | Not a managed service like AWS/Azure VPN Gateway. NovusGate is self-hosted and can run on any cloud or on-premises |
+| 🔐 IPsec VPN | ❌ | Uses WireGuard protocol instead of IPsec |
+| 🌐 SSL VPN | ❌ | Not browser-based, requires WireGuard client |
+| 💻 **Client-Based VPN** | ✅ | Requires WireGuard client software |
+| 🏢 Site-to-Site VPN | ⚠️ | Possible via node-to-node connections |
+| 📡 **Remote Access VPN** | ✅ | Primary use case |
+
+**Key Characteristics:**
+- **Protocol:** WireGuard (modern, fast, secure)
+- **Architecture:** Hub-and-Spoke (centralized control)
+- **Tunneling:** Encrypted trusted tunnel with Split Tunneling
+- **Deployment:** Cloud-ready (any provider) or on-premises
+- **Clients:** Mobile (QR), Desktop (.conf), Linux (scripts)
 
 ---
 
@@ -480,5 +548,11 @@ Open-source lives through community.
 
 ---
 
-**Developed by [Ali Zeynalli](https://github.com/Ali7Zeynalli)**
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**Developed by [Ali Zeynalli](https://github.com/Ali7Zeynalli)**  
 *Project NovusGate*
