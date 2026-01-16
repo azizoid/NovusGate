@@ -548,6 +548,43 @@ Open-source lives through community.
 
 ---
 
+## 🤝 Professional Support / Enterprise Support
+
+> **Finding installation difficult?** We can help!
+
+If you cannot perform the steps shown in this guide yourself or need full enterprise-level support, you can contact us:
+
+### Paid Services
+
+| Service | Description |
+|---------|-------------|
+| 🛠️ **Full Installation** | Complete installation of NovusGate in your infrastructure |
+| 🔧 **Server Configuration** | Linux, Docker, Firewall and Security configuration |
+| 📞 **Technical Support** | Problem resolution and ongoing support |
+| 📚 **Training** | NovusGate usage training for your team |
+
+> 💰 **Pricing**: Service fees are calculated individually based on the scope and complexity of work. Contact us for a free consultation.
+
+### Contact
+
+📧 **Email**: Ali.Z.Zeynalli@gmail.com  
+💼 **LinkedIn**: [linkedin.com/in/ali7zeynalli](https://linkedin.com/in/ali7zeynalli)  
+📱 **Phone**: +49 152 2209 4631 (WhatsApp)
+
+> 💼 SLA (Service Level Agreement) support is available for enterprise customers.
+
+### 🌍 Supported Languages
+
+| Language | Dil |
+|----------|-----|
+| 🇦🇿 Azerbaijani | Azərbaycan |
+| 🇬🇧 English | İngilis |
+| 🇩🇪 German | Alman |
+| 🇷🇺 Russian | Rus |
+| 🇹🇷 Turkish | Türk |
+
+---
+
 ## 📄 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.

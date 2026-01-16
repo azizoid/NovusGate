@@ -547,6 +547,43 @@ Açıq-qaynaq (Open-source) icma ilə yaşayır.
 
 ---
 
+## 🤝 Professional Dəstək / Enterprise Support
+
+> **Quraşdırma çətin gəlir?** Biz sizə kömək edə bilərik!
+
+Əgər bu təlimatda göstərilən addımları özünüz icra edə bilmirsinizsə və ya enterprise səviyyəsində tam dəstək lazımdırsa, bizə müraciət edə bilərsiniz:
+
+### Ödənişli Xidmətlər
+
+| Xidmət | Təsvir |
+|--------|--------|
+| 🛠️ **Tam Quraşdırma** | NovusGate-in sizin infrastrukturda tam quraşdırılması |
+| 🔧 **Server Konfiqurasiyası** | Linux, Docker, Firewall və Təhlükəsizlik konfiqurasiyası |
+| 📞 **Texniki Dəstək** | Problem həlli və davamlı dəstək |
+| 📚 **Təlim** | Komandanız üçün NovusGate istifadəsi təlimi |
+
+> 💰 **Qiymətləndirmə**: Xidmət haqqı görüləcək işin həcminə və mürəkkəbliyinə əsasən fərdi olaraq hesablanır. Pulsuz konsultasiya üçün bizimlə əlaqə saxlayın.
+
+### Əlaqə
+
+📧 **Email**: Ali.Z.Zeynalli@gmail.com  
+💼 **LinkedIn**: [linkedin.com/in/ali7zeynalli](https://linkedin.com/in/ali7zeynalli)  
+📱 **Telefon**: +49 152 2209 4631 (whatsapp)
+
+> 💼 Enterprise müştərilər üçün SLA (Service Level Agreement) ilə dəstək mövcuddur.
+
+### 🌍 Dəstək Verilən Dillər
+
+| Dil | Language |
+|-----|----------|
+| 🇦🇿 Azərbaycan | Azerbaijani |
+| 🇬🇧 İngilis | English |
+| 🇩🇪 Alman | German |
+| 🇷🇺 Rus | Russian |
+| 🇹🇷 Türk | Turkish |
+
+---
+
 ## 📄 Lisenziya
 
 Bu layihə **MIT Lisenziyası** altında lisenziyalanıb - ətraflı məlumat üçün [LICENSE](LICENSE) faylına baxın.
